@@ -1,0 +1,22 @@
+@import "tailwindcss";
+
+/*
+ * Clinic Care System — Global Styles
+ *
+ * Tailwind CSS v4 uses a CSS-first configuration approach.
+ * Custom theme tokens are defined here using @theme.
+ */
+
+@theme {
+  --color-primary: #6366f1;
+  --color-primary-dark: #4f46e5;
+  --color-primary-light: #818cf8;
+  --color-secondary: #0ea5e9;
+  --color-accent: #f59e0b;
+  --color-success: #10b981;
+  --color-danger: #ef4444;
+  --color-warning: #f59e0b;
+  --color-surface: #1e1b4b;
+  --color-surface-light: #f8fafc;
+  --font-sans: 'Inter', system-ui, -apple-system, sans-serif;
+}

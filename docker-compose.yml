@@ -1,0 +1,63 @@
+# ---- Docker Compose ----
+# Orchestrates three services: backend, frontend, nginx
+#
+# Usage:
+#   docker compose up --build       # Build and start all services
+#   docker compose down             # Stop and remove containers
+#   docker compose logs -f backend  # Follow backend logs
+
+services:
+  # Django + Gunicorn backend
+  backend:
+    build:
+      context: .
+      dockerfile: docker/backend/Dockerfile
+    container_name: clinic-backend
+    env_file:
+      - .env
+    environment:
+      - DJANGO_DEBUG=False
+      - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend
+    volumes:
+      - backend_static:/app/staticfiles
+      - backend_media:/app/media
+    expose:
+      - "8000"
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+  # React + Vite frontend (served by Nginx)
+  frontend:
+    build:
+      context: .
+      dockerfile: docker/frontend/Dockerfile
+    container_name: clinic-frontend
+    expose:
+      - "3000"
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+  # Nginx reverse proxy
+  nginx:
+    build:
+      context: .
+      dockerfile: docker/nginx/Dockerfile
+    container_name: clinic-nginx
+    ports:
+      - "80:80"
+    depends_on:
+      - backend
+      - frontend
+    networks:
+      - clinic-network
+    restart: unless-stopped
+
+networks:
+  clinic-network:
+    driver: bridge
+
+volumes:
+  backend_static:
+  backend_media:
