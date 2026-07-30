@@ -20,3 +20,15 @@ export const useCreateAppointmentMutation = () => {
     },
   })
 }
+
+export const useUpdateAppointmentMutation = () => {
+  const queryClient = useQueryClient()
+
+  return useMutation({
+    mutationFn: ({ id, data }) => appointmentsApi.updateAppointment(id, data),
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['appointments'] })
+      queryClient.invalidateQueries({ queryKey: ['dashboard'] })
+    },
+  })
+}

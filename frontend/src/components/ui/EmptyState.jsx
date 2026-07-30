@@ -1,41 +1,37 @@
 import React from 'react'
-import { Inbox, SearchX, AlertCircle } from 'lucide-react'
-import Button from './Button'
-
-/**
- * Clinic Care System — Empty State Components
- */
+import { FolderOpen, AlertCircle } from 'lucide-react'
+import { Button } from './Button'
 
 export const EmptyState = ({
-  icon: Icon = Inbox,
-  title = 'No records found',
-  description = 'There are no items to display at this time.',
+  icon: Icon = FolderOpen,
+  title = 'No Records Found',
+  description = 'There are no items to display right now.',
   actionLabel,
   onAction,
   actionIcon,
   variant = 'default',
   className = '',
 }) => {
-  const iconBgs = {
-    default: 'bg-indigo-500/10 text-indigo-400 border-indigo-500/20',
-    search: 'bg-sky-500/10 text-sky-400 border-sky-500/20',
-    error: 'bg-rose-500/10 text-rose-400 border-rose-500/20',
-  }
-
-  const DisplayIcon = variant === 'search' ? SearchX : variant === 'error' ? AlertCircle : Icon
+  const isError = variant === 'error'
 
   return (
-    <div className={`flex flex-col items-center justify-center p-8 sm:p-12 text-center bg-slate-900/60 border border-slate-800/80 rounded-2xl ${className}`}>
-      <div className={`p-4 rounded-2xl border ${iconBgs[variant] || iconBgs.default} mb-4 shadow-sm`}>
-        <DisplayIcon className="w-8 h-8" />
+    <div
+      className={`bg-white border border-slate-200 rounded-2xl p-8 sm:p-12 text-center flex flex-col items-center justify-center max-w-lg mx-auto shadow-sm ${className}`}
+    >
+      <div
+        className={`w-14 h-14 rounded-2xl flex items-center justify-center mb-4 border ${
+          isError ? 'bg-red-50 text-red-600 border-red-200' : 'bg-slate-100 text-slate-500 border-slate-200'
+        }`}
+      >
+        {isError ? <AlertCircle className="w-7 h-7" /> : <Icon className="w-7 h-7" />}
       </div>
 
-      <h4 className="text-base font-bold text-white tracking-tight">{title}</h4>
-      <p className="text-xs text-slate-400 max-w-sm mt-1.5 leading-relaxed">{description}</p>
+      <h3 className="text-base font-bold text-slate-900 tracking-tight">{title}</h3>
+      <p className="text-xs text-slate-500 max-w-sm mt-1 leading-relaxed">{description}</p>
 
       {actionLabel && onAction && (
-        <div className="mt-6">
-          <Button variant="primary" size="md" onClick={onAction} icon={actionIcon}>
+        <div className="mt-5">
+          <Button variant={isError ? 'secondary' : 'primary'} size="sm" icon={actionIcon} onClick={onAction}>
             {actionLabel}
           </Button>
         </div>

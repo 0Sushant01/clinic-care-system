@@ -39,7 +39,7 @@ api.interceptors.request.use(
   (error) => Promise.reject(error)
 )
 
-// Response Interceptor — Extract data & handle cookie refresh/redirect
+// Response Interceptor — Extract data & handle cookie refresh/403 forbidden
 api.interceptors.response.use(
   (response) => {
     return response.data
@@ -51,6 +51,7 @@ api.interceptors.response.use(
       return Promise.reject(error.response?.data || error)
     }
 
+    // Handle 401 Unauthorized -> Refresh token
     if (error.response?.status === 401 && !originalRequest._retry) {
       originalRequest._retry = true
       try {
@@ -59,6 +60,15 @@ api.interceptors.response.use(
       } catch (refreshError) {
         return Promise.reject(error.response?.data || error)
       }
+    }
+
+    // Handle 403 Forbidden -> Permission denied
+    if (error.response?.status === 403) {
+      return Promise.reject({
+        success: false,
+        message: 'You do not have permission to perform this action.',
+        status: 403,
+      })
     }
 
     return Promise.reject(error.response?.data || { success: false, message: error.message || 'An error occurred' })

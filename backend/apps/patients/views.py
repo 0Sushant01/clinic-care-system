@@ -4,17 +4,23 @@ from rest_framework.permissions import IsAuthenticated
 
 from .models import Patient
 from .serializers import PatientSerializer
+from common.permissions import IsAdminOrReceptionist
 from common.responses import success_response, error_response
+from apps.appointments.models import Appointment
 
 
 class PatientViewSet(viewsets.ModelViewSet):
     """
     CRUD API for Patients.
 
-    Supports search (?search=name), filtering (?status=active), ordering, and pagination.
+    Ownership Access Rules:
+    - Search / List: Returns all active patients (name, age, gender, phone) so staff can search.
+    - Retrieve (Detail Record):
+        - Admin & Receptionist: Granted.
+        - Therapist: Granted ONLY IF patient.created_by == request.user OR therapist has at least 1 appointment with patient. Otherwise returns HTTP 403 Forbidden.
+    - Create: Allowed for Admin, Receptionist, and Therapist (sets created_by=request.user).
     """
 
-    queryset = Patient.objects.all()
     serializer_class = PatientSerializer
     permission_classes = [IsAuthenticated]
     filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
@@ -22,6 +28,22 @@ class PatientViewSet(viewsets.ModelViewSet):
     search_fields = ["first_name", "last_name", "email", "phone"]
     ordering_fields = ["created_at", "first_name", "last_name", "status"]
     ordering = ["-created_at"]
+
+    def get_queryset(self):
+        user = self.request.user
+        if not user or not user.is_authenticated:
+            return Patient.objects.none()
+
+        return Patient.objects.filter(is_deleted=False)
+
+    def get_permissions(self):
+        """Allow Admin, Receptionist, and Therapist to create patients."""
+        if self.action in ["update", "partial_update", "destroy"]:
+            return [IsAuthenticated(), IsAdminOrReceptionist()]
+        return [IsAuthenticated()]
+
+    def perform_create(self, serializer):
+        serializer.save(created_by=self.request.user)
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -39,8 +61,21 @@ class PatientViewSet(viewsets.ModelViewSet):
         return success_response(data=serializer.data, message="Patient created successfully.", status_code=201)
 
     def retrieve(self, request, *args, **kwargs):
-        instance = self.get_object()
-        serializer = self.get_serializer(instance)
+        patient = self.get_object()
+        user = request.user
+
+        # Ownership Access Enforcement for Therapists
+        if getattr(user, "role", None) == "therapist":
+            is_creator = patient.created_by == user
+            has_appointment = Appointment.objects.filter(patient=patient, therapist=user).exists()
+
+            if not (is_creator or has_appointment):
+                return error_response(
+                    message="Access Denied: You do not have appointments or ownership with this patient.",
+                    status_code=403,
+                )
+
+        serializer = self.get_serializer(patient)
         return success_response(data=serializer.data)
 
     def update(self, request, *args, **kwargs):

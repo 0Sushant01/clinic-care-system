@@ -1,29 +1,35 @@
 """
-Cookie-based JWT authentication views.
-
-Instead of returning tokens in the response body, these views set
-HttpOnly cookies. The browser automatically sends cookies with every
-request — React never sees or manages the tokens.
-
-Flow:
-    1. POST /api/v1/auth/login/    → Sets access_token + refresh_token cookies
-    2. POST /api/v1/auth/refresh/  → Reads refresh cookie, sets new access cookie
-    3. POST /api/v1/auth/logout/   → Deletes both cookies
-    4. GET  /api/v1/auth/me/       → Returns current user profile
+Cookie-based JWT authentication views, UserViewSet for staff management, and Personal Profile APIs.
 """
 
 import logging
 
 from django.conf import settings
 from django.middleware.csrf import get_token
-from rest_framework import status
+from rest_framework import viewsets, filters, status
+from rest_framework.decorators import action
 from rest_framework.permissions import AllowAny, IsAuthenticated
 from rest_framework.response import Response
 from rest_framework.views import APIView
 from rest_framework_simplejwt.exceptions import InvalidToken, TokenError
 from rest_framework_simplejwt.tokens import RefreshToken
+from django_filters.rest_framework import DjangoFilterBackend
 
-from .serializers import LoginSerializer, UserProfileSerializer
+from .models import CustomUser
+from .serializers import (
+    LoginSerializer,
+    UserProfileSerializer,
+    UserDetailSerializer,
+    UserCreateSerializer,
+    UserUpdateSerializer,
+    ResetPasswordSerializer,
+    ProfileUpdateSerializer,
+    ChangePasswordSerializer,
+)
+from .services import UserService
+from common.permissions import IsAdmin
+from common.responses import success_response, error_response
+from services.audit.service import AuditLogService
 
 logger = logging.getLogger("apps.users")
 
@@ -60,15 +66,10 @@ def _delete_auth_cookies(response: Response) -> Response:
 
 
 class CookieTokenObtainView(APIView):
-    """
-    POST /api/v1/auth/login/
-
-    Authenticate with email + password. Sets HttpOnly cookies on success.
-    Also sets the CSRF token cookie so React can include it in subsequent requests.
-    """
+    """POST /api/v1/auth/login/"""
 
     permission_classes = [AllowAny]
-    authentication_classes = []  # No auth required for login
+    authentication_classes = []
 
     def post(self, request):
         serializer = LoginSerializer(data=request.data)
@@ -88,8 +89,6 @@ class CookieTokenObtainView(APIView):
         )
 
         _set_auth_cookies(response, access, str(refresh))
-
-        # Ensure CSRF cookie is set for subsequent requests
         get_token(request)
 
         logger.info("User logged in: %s", user.email)
@@ -97,15 +96,10 @@ class CookieTokenObtainView(APIView):
 
 
 class CookieTokenRefreshView(APIView):
-    """
-    POST /api/v1/auth/refresh/
-
-    Refresh the access token using the refresh cookie.
-    The browser sends the cookie automatically — no request body needed.
-    """
+    """POST /api/v1/auth/refresh/"""
 
     permission_classes = [AllowAny]
-    authentication_classes = []  # No auth required for refresh
+    authentication_classes = []
 
     def post(self, request):
         raw_refresh = request.COOKIES.get("refresh_token")
@@ -119,7 +113,6 @@ class CookieTokenRefreshView(APIView):
             refresh = RefreshToken(raw_refresh)
             access = str(refresh.access_token)
 
-            # Rotate refresh token
             refresh.set_jti()
             refresh.set_exp()
 
@@ -140,11 +133,7 @@ class CookieTokenRefreshView(APIView):
 
 
 class CookieLogoutView(APIView):
-    """
-    POST /api/v1/auth/logout/
-
-    Clear JWT cookies and blacklist the refresh token.
-    """
+    """POST /api/v1/auth/logout/"""
 
     permission_classes = [IsAuthenticated]
 
@@ -156,7 +145,7 @@ class CookieLogoutView(APIView):
                 refresh = RefreshToken(raw_refresh)
                 refresh.blacklist()
             except (TokenError, InvalidToken):
-                pass  # Token already invalid — just clear cookies
+                pass
 
         response = Response(
             {"success": True, "message": "Logged out successfully."},
@@ -169,12 +158,7 @@ class CookieLogoutView(APIView):
 
 
 class MeView(APIView):
-    """
-    GET /api/v1/auth/me/
-
-    Return the current authenticated user's profile.
-    Used by the frontend to check auth state on page load.
-    """
+    """GET /api/v1/auth/me/"""
 
     permission_classes = [IsAuthenticated]
 
@@ -187,3 +171,133 @@ class MeView(APIView):
             },
             status=status.HTTP_200_OK,
         )
+
+
+class ProfileView(APIView):
+    """
+    GET / PATCH /api/v1/profile/
+
+    Personal Profile API accessible to all authenticated staff.
+    Allows updating first_name, last_name, phone, and therapist details.
+    Email is strictly read-only.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def get(self, request):
+        serializer = UserDetailSerializer(request.user)
+        return success_response(data=serializer.data)
+
+    def patch(self, request):
+        serializer = ProfileUpdateSerializer(data=request.data, context={"user": request.user})
+        serializer.is_valid(raise_exception=True)
+        user = UserService.update_staff_user(request.user, request.user, serializer.validated_data)
+
+        AuditLogService.log_action(
+            user=request.user,
+            action="UPDATE_OWN_PROFILE",
+            resource_type="User",
+            resource_id=str(user.id),
+        )
+
+        return success_response(
+            data=UserDetailSerializer(user).data,
+            message="Profile updated successfully.",
+        )
+
+
+class ChangePasswordView(APIView):
+    """
+    POST /api/v1/profile/change-password/
+
+    Personal Password Change API requiring valid old_password.
+    """
+
+    permission_classes = [IsAuthenticated]
+
+    def post(self, request):
+        serializer = ChangePasswordSerializer(data=request.data, context={"user": request.user})
+        serializer.is_valid(raise_exception=True)
+        UserService.reset_staff_password(request.user, request.user, serializer.validated_data["new_password"])
+
+        AuditLogService.log_action(
+            user=request.user,
+            action="CHANGE_OWN_PASSWORD",
+            resource_type="User",
+            resource_id=str(request.user.id),
+        )
+
+        return success_response(message="Password changed successfully.")
+
+
+class UserViewSet(viewsets.ModelViewSet):
+    """
+    Staff Management API ViewSet (/api/v1/users/)
+
+    Strictly Admin-Only. Receptionists and Therapists receive HTTP 403 Forbidden.
+    """
+
+    queryset = CustomUser.objects.all()
+    serializer_class = UserDetailSerializer
+    permission_classes = [IsAuthenticated, IsAdmin]
+    filter_backends = [DjangoFilterBackend, filters.SearchFilter, filters.OrderingFilter]
+    filterset_fields = ["role", "is_active"]
+    search_fields = ["first_name", "last_name", "email", "phone"]
+    ordering_fields = ["created_at", "last_login", "first_name", "last_name"]
+    ordering = ["-created_at"]
+
+    def list(self, request, *args, **kwargs):
+        queryset = self.filter_queryset(self.get_queryset())
+        page = self.paginate_queryset(queryset)
+        if page is not None:
+            serializer = self.get_serializer(page, many=True)
+            return self.get_paginated_response(serializer.data)
+        serializer = self.get_serializer(queryset, many=True)
+        return success_response(data=serializer.data)
+
+    def create(self, request, *args, **kwargs):
+        serializer = UserCreateSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        user = UserService.create_staff_user(request.user, serializer.validated_data)
+        return success_response(
+            data=UserDetailSerializer(user).data,
+            message="Staff user created successfully.",
+            status_code=201,
+        )
+
+    def retrieve(self, request, *args, **kwargs):
+        instance = self.get_object()
+        return success_response(data=UserDetailSerializer(instance).data)
+
+    def update(self, request, *args, **kwargs):
+        partial = kwargs.pop("partial", False)
+        instance = self.get_object()
+        serializer = UserUpdateSerializer(
+            data=request.data,
+            partial=partial,
+            context={"user_id": instance.id, "current_role": instance.role},
+        )
+        serializer.is_valid(raise_exception=True)
+        user = UserService.update_staff_user(request.user, instance, serializer.validated_data)
+        return success_response(
+            data=UserDetailSerializer(user).data,
+            message="Staff user updated successfully.",
+        )
+
+    def destroy(self, request, *args, **kwargs):
+        """Soft-deactivate user instead of deleting."""
+        instance = self.get_object()
+        user = UserService.toggle_staff_active(request.user, instance, is_active=False)
+        return success_response(
+            data=UserDetailSerializer(user).data,
+            message="Staff user deactivated successfully.",
+        )
+
+    @action(detail=True, methods=["post"], url_path="reset-password")
+    def reset_password(self, request, pk=None):
+        """POST /api/v1/users/{id}/reset-password/"""
+        instance = self.get_object()
+        serializer = ResetPasswordSerializer(data=request.data)
+        serializer.is_valid(raise_exception=True)
+        UserService.reset_staff_password(request.user, instance, serializer.validated_data["new_password"])
+        return success_response(message="Password reset successfully.")

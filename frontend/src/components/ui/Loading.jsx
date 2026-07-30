@@ -1,63 +1,49 @@
 import React from 'react'
 import { Loader2 } from 'lucide-react'
 
-/**
- * Clinic Care System — Loading & Skeleton Components
- */
+export const Skeleton = ({ className = '' }) => {
+  return <div className={`animate-pulse bg-slate-200/70 rounded-xl ${className}`} />
+}
 
-export const Spinner = ({ size = 'md', className = '' }) => {
-  const sizeClasses = {
-    sm: 'w-4 h-4',
-    md: 'w-6 h-6',
-    lg: 'w-10 h-10',
-    xl: 'w-16 h-16',
-  }
-
+export const CardSkeleton = () => {
   return (
-    <Loader2 className={`animate-spin text-indigo-500 ${sizeClasses[size] || sizeClasses.md} ${className}`} />
+    <div className="bg-white border border-slate-200 rounded-2xl p-5 shadow-sm space-y-4">
+      <div className="flex items-center justify-between">
+        <Skeleton className="h-4 w-28" />
+        <Skeleton className="h-9 w-9 rounded-xl" />
+      </div>
+      <Skeleton className="h-8 w-20" />
+      <Skeleton className="h-3 w-36" />
+    </div>
   )
 }
 
-export const PulseSkeleton = ({ className = '', height = 'h-4', width = 'w-full', rounded = 'rounded-md' }) => (
-  <div className={`bg-slate-800/60 animate-pulse ${height} ${width} ${rounded} ${className}`} />
-)
-
-export const FullPageLoader = ({ label = 'Loading application...' }) => (
-  <div className="fixed inset-0 z-50 flex flex-col items-center justify-center bg-slate-950/90 backdrop-blur-md">
-    <div className="relative flex items-center justify-center mb-4">
-      <div className="absolute w-16 h-16 rounded-full border-4 border-indigo-500/20 animate-ping" />
-      <Spinner size="lg" />
-    </div>
-    <p className="text-sm font-medium text-slate-300 animate-pulse">{label}</p>
-  </div>
-)
-
-export const CardSkeleton = () => (
-  <div className="p-5 bg-slate-900/80 border border-slate-800/80 rounded-2xl space-y-4 animate-pulse">
-    <div className="flex justify-between items-center">
-      <PulseSkeleton width="w-1/3" height="h-4" />
-      <PulseSkeleton width="w-8" height="h-8" rounded="rounded-xl" />
-    </div>
-    <PulseSkeleton width="w-1/2" height="h-8" />
-    <PulseSkeleton width="w-2/3" height="h-3" />
-  </div>
-)
-
-export const TableSkeleton = ({ rows = 5 }) => (
-  <div className="w-full space-y-3 p-4 bg-slate-900/80 border border-slate-800/80 rounded-2xl animate-pulse">
-    <div className="flex justify-between pb-3 border-b border-slate-800">
-      <PulseSkeleton width="w-1/4" height="h-4" />
-      <PulseSkeleton width="w-1/4" height="h-4" />
-      <PulseSkeleton width="w-1/4" height="h-4" />
-    </div>
-    {Array.from({ length: rows }).map((_, idx) => (
-      <div key={idx} className="flex justify-between items-center py-2">
-        <PulseSkeleton width="w-1/3" height="h-4" />
-        <PulseSkeleton width="w-1/4" height="h-4" />
-        <PulseSkeleton width="w-1/6" height="h-6" rounded="rounded-full" />
+export const TableSkeleton = ({ rows = 5 }) => {
+  return (
+    <div className="bg-white border border-slate-200 rounded-2xl p-4 shadow-sm space-y-3">
+      <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+        <Skeleton className="h-5 w-32" />
+        <Skeleton className="h-8 w-24" />
       </div>
-    ))}
-  </div>
-)
+      {Array.from({ length: rows }).map((_, i) => (
+        <div key={i} className="flex items-center justify-between py-2">
+          <Skeleton className="h-4 w-40" />
+          <Skeleton className="h-4 w-24" />
+          <Skeleton className="h-4 w-16" />
+          <Skeleton className="h-6 w-20 rounded-lg" />
+        </div>
+      ))}
+    </div>
+  )
+}
 
-export default Spinner
+export const FullPageLoader = ({ label = 'Loading...' }) => {
+  return (
+    <div className="min-h-[50vh] flex flex-col items-center justify-center gap-3">
+      <Loader2 className="w-8 h-8 text-blue-600 animate-spin" />
+      <p className="text-xs font-semibold text-slate-500">{label}</p>
+    </div>
+  )
+}
+
+export default CardSkeleton

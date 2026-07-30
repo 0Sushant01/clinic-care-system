@@ -32,16 +32,28 @@ class SessionNoteSerializer(serializers.ModelSerializer):
             "therapist",
             "therapist_name",
             "appointment",
+            # Therapist Original Clinical Record
+            "chief_complaint",
+            "session_notes",
+            "treatment_given",
+            "treatment_performed",
+            "patient_response",
+            "recommendations",
+            # Legacy SOAP fields
             "subjective",
             "objective",
             "assessment",
             "plan",
+            # AI Enhanced Summary
+            "ai_enhanced_summary",
+            "ai_generated_at",
+            "ai_model_used",
             "session_date",
             "ai_results",
             "created_at",
             "updated_at",
         ]
-        read_only_fields = ["id", "session_date", "created_at", "updated_at"]
+        read_only_fields = ["id", "session_date", "ai_enhanced_summary", "ai_generated_at", "ai_model_used", "created_at", "updated_at"]
 
     def get_patient_name(self, obj) -> str:
         return obj.patient.full_name

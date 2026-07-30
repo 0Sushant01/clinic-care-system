@@ -33,3 +33,18 @@ class PatientSerializer(serializers.ModelSerializer):
         if obj.assigned_therapist:
             return obj.assigned_therapist.full_name or obj.assigned_therapist.email
         return "Unassigned"
+
+    def to_representation(self, instance):
+        data = super().to_representation(instance)
+        request = self.context.get("request")
+        # Role + Ownership: Suppress clinical medical_history for Receptionists
+        if request and hasattr(request, "user") and getattr(request.user, "role", None) == "receptionist":
+            data["medical_history"] = "Clinical Data — Restricted to Clinicians"
+        return data
+
+    def validate(self, attrs):
+        request = self.context.get("request")
+        if request and hasattr(request, "user") and getattr(request.user, "role", None) == "receptionist":
+            if "medical_history" in attrs:
+                attrs.pop("medical_history")
+        return attrs

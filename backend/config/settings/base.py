@@ -48,6 +48,7 @@ INSTALLED_APPS = [
     "django_filters",
     "drf_spectacular",
     # Local apps
+    "apps.core",
     "apps.users",
     "apps.patients",
     "apps.therapists",

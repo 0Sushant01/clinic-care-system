@@ -1,210 +1,125 @@
-import React from 'react'
-import { Search, AlertCircle, Check } from 'lucide-react'
+import React, { forwardRef } from 'react'
+import { Search } from 'lucide-react'
 
-/**
- * Clinic Care System — Form Control Components
- * Includes Input, SearchInput, Select, Textarea, Checkbox, Toggle Switch, and FormField wrapper
- */
-
-export const FormField = ({ label, error, helperText, required = false, children, className = '' }) => (
-  <div className={`flex flex-col gap-1.5 ${className}`}>
-    {label && (
-      <label className="text-xs font-semibold text-slate-300 uppercase tracking-wider flex items-center gap-1">
-        {label}
-        {required && <span className="text-rose-400 font-bold">*</span>}
-      </label>
-    )}
-    {children}
-    {error ? (
-      <p className="text-xs text-rose-400 flex items-center gap-1 mt-0.5 animate-fade-in">
-        <AlertCircle className="w-3.5 h-3.5 shrink-0" />
-        {error}
-      </p>
-    ) : helperText ? (
-      <p className="text-xs text-slate-400 mt-0.5">{helperText}</p>
-    ) : null}
-  </div>
+export const Input = forwardRef(
+  ({ className = '', type = 'text', error, ...props }, ref) => {
+    return (
+      <input
+        type={type}
+        ref={ref}
+        className={`w-full h-12 py-3 px-4 text-xs font-medium text-slate-900 bg-white border ${
+          error
+            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+            : 'border-slate-200 hover:border-slate-300 focus:border-blue-600 focus:ring-blue-500/20'
+        } rounded-xl shadow-2xs outline-hidden focus:ring-2 transition-all placeholder:text-slate-400 disabled:bg-slate-50 disabled:text-slate-500 ${className}`}
+        {...props}
+      />
+    )
+  }
 )
 
-export const Input = React.forwardRef(({
-  type = 'text',
-  error = false,
-  icon: Icon,
-  className = '',
-  isDisabled = false,
-  ...props
-}, ref) => {
+Input.displayName = 'Input'
+
+export const SearchInput = forwardRef(({ className = '', ...props }, ref) => {
   return (
-    <div className="relative flex items-center w-full">
-      {Icon && (
-        <div className="absolute left-3 text-slate-400 pointer-events-none flex items-center justify-center">
-          <Icon className="w-4 h-4" />
-        </div>
-      )}
+    <div className="relative w-full">
+      <Search className="w-4 h-4 text-slate-400 absolute left-3.5 top-1/2 -translate-y-1/2 pointer-events-none" />
       <input
         ref={ref}
-        type={type}
-        disabled={isDisabled}
-        className={`w-full bg-slate-900/80 border text-slate-100 placeholder-slate-500 text-sm rounded-lg transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-          Icon ? 'pl-9 pr-3' : 'px-3.5'
-        } py-2.5 ${
-          error
-            ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/30'
-            : 'border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30'
-        } ${className}`}
+        type="text"
+        className={`w-full h-12 py-3 pl-10 pr-4 text-xs font-medium text-slate-900 bg-white border border-slate-200 hover:border-slate-300 focus:border-blue-600 focus:ring-2 focus:ring-blue-500/20 rounded-xl shadow-2xs outline-hidden transition-all placeholder:text-slate-400 ${className}`}
         {...props}
       />
     </div>
   )
 })
-Input.displayName = 'Input'
 
-export const SearchInput = React.forwardRef(({
-  value,
-  onChange,
-  placeholder = 'Search patients, appointments...',
-  className = '',
-  ...props
-}, ref) => {
-  return (
-    <Input
-      ref={ref}
-      type="text"
-      icon={Search}
-      value={value}
-      onChange={onChange}
-      placeholder={placeholder}
-      className={className}
-      {...props}
-    />
-  )
-})
 SearchInput.displayName = 'SearchInput'
 
-export const Select = React.forwardRef(({
-  options = [],
-  error = false,
-  className = '',
-  isDisabled = false,
-  children,
-  ...props
-}, ref) => {
-  return (
-    <select
-      ref={ref}
-      disabled={isDisabled}
-      className={`w-full bg-slate-900/80 border text-slate-100 text-sm rounded-lg px-3.5 py-2.5 transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 disabled:opacity-50 disabled:cursor-not-allowed ${
-        error
-          ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/30'
-          : 'border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30'
-      } ${className}`}
-      {...props}
-    >
-      {children || options.map((opt) => (
-        <option key={opt.value} value={opt.value} className="bg-slate-900 text-slate-100">
-          {opt.label}
-        </option>
-      ))}
-    </select>
-  )
-})
+export const Select = forwardRef(
+  ({ className = '', children, error, ...props }, ref) => {
+    return (
+      <select
+        ref={ref}
+        className={`w-full h-12 px-4 text-xs font-medium text-slate-900 bg-white border ${
+          error
+            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+            : 'border-slate-200 hover:border-slate-300 focus:border-blue-600 focus:ring-blue-500/20'
+        } rounded-xl shadow-2xs outline-hidden focus:ring-2 transition-all cursor-pointer ${className}`}
+        {...props}
+      >
+        {children}
+      </select>
+    )
+  }
+)
+
 Select.displayName = 'Select'
 
-export const Textarea = React.forwardRef(({
-  rows = 4,
-  error = false,
-  className = '',
-  isDisabled = false,
-  ...props
-}, ref) => {
-  return (
-    <textarea
-      ref={ref}
-      rows={rows}
-      disabled={isDisabled}
-      className={`w-full bg-slate-900/80 border text-slate-100 placeholder-slate-500 text-sm rounded-lg px-3.5 py-2.5 transition-all duration-150 ease-in-out focus:outline-none focus:ring-2 custom-scrollbar disabled:opacity-50 disabled:cursor-not-allowed ${
-        error
-          ? 'border-rose-500/80 focus:border-rose-500 focus:ring-rose-500/30'
-          : 'border-slate-700/80 hover:border-slate-600 focus:border-indigo-500 focus:ring-indigo-500/30'
-      } ${className}`}
-      {...props}
-    />
-  )
-})
+export const Textarea = forwardRef(
+  ({ className = '', error, rows = 3, ...props }, ref) => {
+    return (
+      <textarea
+        ref={ref}
+        rows={rows}
+        className={`w-full min-h-[120px] p-4 text-xs font-medium text-slate-900 bg-white border ${
+          error
+            ? 'border-red-300 focus:border-red-500 focus:ring-red-500/20'
+            : 'border-slate-200 hover:border-slate-300 focus:border-blue-600 focus:ring-blue-500/20'
+        } rounded-xl shadow-2xs outline-hidden focus:ring-2 transition-all placeholder:text-slate-400 ${className}`}
+        {...props}
+      />
+    )
+  }
+)
+
 Textarea.displayName = 'Textarea'
 
-export const Checkbox = React.forwardRef(({
-  label,
-  checked = false,
-  onChange,
-  isDisabled = false,
-  className = '',
-  ...props
-}, ref) => {
-  return (
-    <label className={`inline-flex items-center gap-2.5 cursor-pointer select-none ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}>
-      <div className="relative">
-        <input
-          ref={ref}
-          type="checkbox"
-          checked={checked}
-          onChange={onChange}
-          disabled={isDisabled}
-          className="sr-only"
-          {...props}
-        />
-        <div
-          className={`w-5 h-5 rounded border transition-all duration-150 ease-in-out flex items-center justify-center ${
-            checked
-              ? 'bg-indigo-600 border-indigo-500 text-white shadow-sm shadow-indigo-500/30'
-              : 'bg-slate-900 border-slate-700 hover:border-slate-600'
-          }`}
-        >
-          {checked && <Check className="w-3.5 h-3.5 stroke-[3]" />}
-        </div>
-      </div>
-      {label && <span className="text-sm font-medium text-slate-300">{label}</span>}
-    </label>
-  )
-})
-Checkbox.displayName = 'Checkbox'
+export const Toggle = forwardRef(
+  ({ enabled = false, onChange, label, description, className = '' }, ref) => {
+    return (
+      <div className={`flex items-center justify-between gap-4 ${className}`}>
+        {(label || description) && (
+          <div>
+            {label && <p className="text-xs font-bold text-slate-900">{label}</p>}
+            {description && <p className="text-[11px] text-slate-500 mt-0.5">{description}</p>}
+          </div>
+        )}
 
-export const Toggle = React.forwardRef(({
-  label,
-  checked = false,
-  onChange,
-  isDisabled = false,
-  className = '',
-  ...props
-}, ref) => {
-  return (
-    <label className={`inline-flex items-center gap-3 cursor-pointer select-none ${isDisabled ? 'opacity-50 cursor-not-allowed' : ''} ${className}`}>
-      <div className="relative">
-        <input
+        <button
           ref={ref}
-          type="checkbox"
-          checked={checked}
-          onChange={onChange}
-          disabled={isDisabled}
-          className="sr-only"
-          {...props}
-        />
-        <div
-          className={`w-11 h-6 rounded-full transition-colors duration-200 ease-in-out border ${
-            checked ? 'bg-indigo-600 border-indigo-500' : 'bg-slate-800 border-slate-700'
+          type="button"
+          role="switch"
+          aria-checked={enabled}
+          onClick={() => onChange && onChange(!enabled)}
+          className={`relative inline-flex h-6 w-11 shrink-0 cursor-pointer rounded-full border-2 border-transparent transition-colors duration-200 ease-in-out focus:outline-hidden focus:ring-2 focus:ring-blue-500/20 ${
+            enabled ? 'bg-blue-600' : 'bg-slate-200'
           }`}
         >
-          <div
-            className={`w-4 h-4 rounded-full bg-white transition-transform duration-200 ease-in-out mt-0.5 ${
-              checked ? 'translate-x-5.5' : 'translate-x-0.5'
+          <span
+            className={`pointer-events-none inline-block h-5 w-5 transform rounded-full bg-white shadow-xs ring-0 transition duration-200 ease-in-out ${
+              enabled ? 'translate-x-5' : 'translate-x-0'
             }`}
           />
-        </div>
+        </button>
       </div>
-      {label && <span className="text-sm font-medium text-slate-300">{label}</span>}
-    </label>
-  )
-})
+    )
+  }
+)
+
 Toggle.displayName = 'Toggle'
 
-export default Input
+export const FormField = ({ label, required, error, children, className = '' }) => {
+  return (
+    <div className={`space-y-1.5 ${className}`}>
+      {label && (
+        <label className="block text-xs font-bold text-slate-700 tracking-tight">
+          {label}
+          {required && <span className="text-red-500 ml-1">*</span>}
+        </label>
+      )}
+      {children}
+      {error && <p className="text-[11px] font-semibold text-red-600 mt-1">{error}</p>}
+    </div>
+  )
+}

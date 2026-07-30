@@ -1,18 +1,23 @@
 import React from 'react'
 import { useParams, Link } from 'react-router-dom'
-import { ArrowLeft, User, Phone, Mail, Calendar, FileText, Activity, Shield, Sparkles } from 'lucide-react'
+import { ArrowLeft, User, Phone, Mail, Calendar, FileText, Activity, Shield, Lock } from 'lucide-react'
 import { usePatientDetailQuery } from '../hooks/queries/usePatientsQuery'
+import { useAuth } from '../contexts/AuthContext'
 import { Card, CardHeader, CardTitle, CardDescription, CardContent } from '../components/ui/Card'
 import { Badge } from '../components/ui/Badge'
 import { Button } from '../components/ui/Button'
 import { FullPageLoader } from '../components/ui/Loading'
 import { EmptyState } from '../components/ui/EmptyState'
+import { isReceptionist } from '../utils/permissions'
 
 export function PatientDetailPage() {
   const { id } = useParams()
-  const { data: patient, isLoading, error, refetch } = usePatientDetailQuery(id)
+  const { user } = useAuth()
+  const isReceptionistRole = isReceptionist(user)
 
-  if (isLoading) return <FullPageLoader label="Fetching patient medical record..." />
+  const { data: patient, isLoading, error } = usePatientDetailQuery(id)
+
+  if (isLoading) return <FullPageLoader label="Fetching patient record..." />
 
   if (error || !patient) {
     return (
@@ -26,6 +31,9 @@ export function PatientDetailPage() {
     )
   }
 
+  const isMedicalRestricted =
+    isReceptionistRole || patient.medical_history === 'Clinical Data — Restricted to Clinicians'
+
   return (
     <div className="space-y-6 animate-fade-in">
       {/* Top Breadcrumb & Actions */}
@@ -37,11 +45,13 @@ export function PatientDetailPage() {
         </Link>
 
         <div className="flex items-center gap-3">
-          <Link to="/session-notes">
-            <Button variant="secondary" size="sm" icon={FileText}>
-              New Session Note
-            </Button>
-          </Link>
+          {!isReceptionistRole && (
+            <Link to="/session-notes">
+              <Button variant="secondary" size="sm" icon={FileText}>
+                New Session Note
+              </Button>
+            </Link>
+          )}
           <Link to="/appointments">
             <Button variant="primary" size="sm" icon={Calendar}>
               Book Session
@@ -51,39 +61,39 @@ export function PatientDetailPage() {
       </div>
 
       {/* Patient Profile Banner */}
-      <Card className="p-6 bg-gradient-to-r from-slate-900 via-slate-900 to-indigo-950/40 border-indigo-500/20">
+      <Card className="p-6 bg-white border-slate-200">
         <div className="flex flex-wrap items-start justify-between gap-6">
           <div className="flex items-center gap-4">
-            <div className="w-16 h-16 rounded-2xl bg-indigo-600/20 border border-indigo-500/30 flex items-center justify-center text-indigo-300 font-extrabold text-2xl shrink-0 shadow-lg">
+            <div className="w-16 h-16 rounded-2xl bg-blue-50 border border-blue-200 text-blue-700 font-extrabold text-2xl flex items-center justify-center shrink-0 shadow-xs">
               {patient.first_name ? patient.first_name[0] : 'P'}
             </div>
             <div>
               <div className="flex items-center gap-3">
-                <h1 className="text-2xl font-extrabold text-white tracking-tight">
+                <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight">
                   {patient.full_name || `${patient.first_name} ${patient.last_name}`}
                 </h1>
                 <Badge variant={patient.status === 'active' ? 'success' : 'warning'} dot>
                   {patient.status}
                 </Badge>
               </div>
-              <p className="text-xs text-slate-400 mt-1 font-mono">Patient ID: {patient.id}</p>
+              <p className="text-xs text-slate-500 mt-1 font-mono">Patient ID: {patient.id}</p>
             </div>
           </div>
 
           <div className="flex flex-wrap gap-4 text-xs">
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center gap-3">
-              <Phone className="w-4 h-4 text-indigo-400" />
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-3">
+              <Phone className="w-4 h-4 text-blue-600" />
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-semibold">Phone</p>
-                <p className="font-semibold text-slate-200">{patient.phone || 'N/A'}</p>
+                <p className="font-semibold text-slate-900">{patient.phone || 'N/A'}</p>
               </div>
             </div>
 
-            <div className="bg-slate-950/60 p-3 rounded-xl border border-slate-800 flex items-center gap-3">
-              <Mail className="w-4 h-4 text-indigo-400" />
+            <div className="bg-slate-50 p-3 rounded-xl border border-slate-200 flex items-center gap-3">
+              <Mail className="w-4 h-4 text-blue-600" />
               <div>
                 <p className="text-[10px] text-slate-500 uppercase font-semibold">Email</p>
-                <p className="font-semibold text-slate-200">{patient.email || 'N/A'}</p>
+                <p className="font-semibold text-slate-900">{patient.email || 'N/A'}</p>
               </div>
             </div>
           </div>
@@ -99,21 +109,26 @@ export function PatientDetailPage() {
             <CardDescription>Clinical summary and pre-existing conditions</CardDescription>
           </CardHeader>
           <CardContent className="space-y-4">
-            <div className="bg-slate-950/60 p-4 rounded-xl border border-slate-800">
-              <p className="text-xs font-semibold text-slate-400 uppercase tracking-wider mb-2">History Summary</p>
-              <p className="text-sm text-slate-200 leading-relaxed">
-                {patient.medical_history || 'No pre-existing medical history logged for this patient.'}
+            <div className="bg-slate-50 p-4 rounded-xl border border-slate-200">
+              <p className="text-xs font-semibold text-slate-500 uppercase tracking-wider mb-2 flex items-center gap-1.5">
+                {isMedicalRestricted && <Lock className="w-3.5 h-3.5 text-amber-600" />}
+                History Summary
+              </p>
+              <p className={`text-sm leading-relaxed ${isMedicalRestricted ? 'text-slate-500 italic' : 'text-slate-800'}`}>
+                {isMedicalRestricted
+                  ? 'Clinical Data — Restricted to Clinicians & Therapists'
+                  : patient.medical_history || 'No pre-existing medical history logged for this patient.'}
               </p>
             </div>
 
             <div className="grid grid-cols-2 gap-4 text-xs">
-              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[10px] text-slate-500 uppercase font-semibold">Gender</span>
-                <p className="font-semibold text-white capitalize mt-0.5">{patient.gender || 'Not specified'}</p>
+                <p className="font-semibold text-slate-900 capitalize mt-0.5">{patient.gender || 'Not specified'}</p>
               </div>
-              <div className="bg-slate-950/40 p-3 rounded-xl border border-slate-800">
+              <div className="bg-slate-50 p-3 rounded-xl border border-slate-200">
                 <span className="text-[10px] text-slate-500 uppercase font-semibold">Date of Birth</span>
-                <p className="font-semibold text-white mt-0.5">{patient.date_of_birth || 'Not recorded'}</p>
+                <p className="font-semibold text-slate-900 mt-0.5">{patient.date_of_birth || 'Not recorded'}</p>
               </div>
             </div>
           </CardContent>
@@ -126,13 +141,13 @@ export function PatientDetailPage() {
               <CardTitle icon={User}>Assigned Therapist</CardTitle>
             </CardHeader>
             <CardContent>
-              <div className="p-3 bg-slate-950/60 border border-slate-800 rounded-xl flex items-center gap-3">
-                <div className="w-10 h-10 rounded-xl bg-indigo-500/20 text-indigo-300 font-bold flex items-center justify-center shrink-0">
+              <div className="p-3 bg-slate-50 border border-slate-200 rounded-xl flex items-center gap-3">
+                <div className="w-10 h-10 rounded-xl bg-blue-50 border border-blue-200 text-blue-700 font-bold flex items-center justify-center shrink-0">
                   Dr
                 </div>
                 <div>
-                  <h4 className="text-sm font-bold text-white">{patient.assigned_therapist_name || 'Unassigned'}</h4>
-                  <p className="text-xs text-slate-400">Lead Therapist</p>
+                  <h4 className="text-sm font-bold text-slate-900">{patient.assigned_therapist_name || 'Unassigned'}</h4>
+                  <p className="text-xs text-slate-500">Lead Practitioner</p>
                 </div>
               </div>
             </CardContent>
@@ -144,12 +159,12 @@ export function PatientDetailPage() {
             </CardHeader>
             <CardContent className="space-y-2 text-xs">
               <div>
-                <span className="text-slate-400">Name:</span>{' '}
-                <strong className="text-white">{patient.emergency_contact_name || 'Not provided'}</strong>
+                <span className="text-slate-500">Name:</span>{' '}
+                <strong className="text-slate-900">{patient.emergency_contact_name || 'Not provided'}</strong>
               </div>
               <div>
-                <span className="text-slate-400">Phone:</span>{' '}
-                <strong className="text-slate-200">{patient.emergency_contact_phone || 'N/A'}</strong>
+                <span className="text-slate-500">Phone:</span>{' '}
+                <strong className="text-slate-700">{patient.emergency_contact_phone || 'N/A'}</strong>
               </div>
             </CardContent>
           </Card>

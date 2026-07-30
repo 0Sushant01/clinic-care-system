@@ -6,15 +6,14 @@ from apps.patients.models import Patient
 
 class AppointmentStatus(models.TextChoices):
     SCHEDULED = "scheduled", "Scheduled"
-    CONFIRMED = "confirmed", "Confirmed"
-    IN_PROGRESS = "in_progress", "In Progress"
     COMPLETED = "completed", "Completed"
     CANCELLED = "cancelled", "Cancelled"
 
 
 class Appointment(BaseModel):
     """
-    Appointment entity.
+    Appointment entity supporting 3-status clinical workflow:
+    scheduled | completed | cancelled
     """
 
     patient = models.ForeignKey(Patient, on_delete=models.CASCADE, related_name="appointments")
@@ -29,10 +28,22 @@ class Appointment(BaseModel):
     status = models.CharField(
         max_length=20,
         choices=AppointmentStatus.choices,
-        default=AppointmentStatus.CONFIRMED,
+        default=AppointmentStatus.SCHEDULED,
     )
     room_number = models.CharField(max_length=50, default="Room 101")
     notes = models.TextField(blank=True)
+
+    # Cancellation Metadata
+    cancel_reason = models.CharField(max_length=100, blank=True, null=True)
+    cancel_notes = models.TextField(blank=True)
+    cancelled_by = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.SET_NULL,
+        null=True,
+        blank=True,
+        related_name="cancelled_appointments",
+    )
+    cancelled_at = models.DateTimeField(null=True, blank=True)
 
     class Meta:
         verbose_name = "appointment"
@@ -40,4 +51,4 @@ class Appointment(BaseModel):
         ordering = ["appointment_date", "start_time"]
 
     def __str__(self) -> str:
-        return f"{self.patient.full_name} with {self.therapist.full_name} on {self.appointment_date} at {self.start_time}"
+        return f"{self.patient.full_name} with {self.therapist.full_name} on {self.appointment_date} ({self.status})"

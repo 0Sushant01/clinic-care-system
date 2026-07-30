@@ -1,7 +1,8 @@
 import React, { useState } from 'react'
 import { Link } from 'react-router-dom'
-import { Users, UserPlus, Search, Edit, Eye, Filter } from 'lucide-react'
+import { Users, UserPlus, Eye, Filter } from 'lucide-react'
 import { usePatientsQuery } from '../hooks/queries/usePatientsQuery'
+import { useAuth } from '../contexts/AuthContext'
 import { Button } from '../components/ui/Button'
 import { SearchInput, Select } from '../components/ui/Input'
 import { Badge } from '../components/ui/Badge'
@@ -9,8 +10,12 @@ import { TableContainer, Table, TableHeader, TableHead, TableBody, TableRow, Tab
 import { TableSkeleton } from '../components/ui/Loading'
 import { EmptyState } from '../components/ui/EmptyState'
 import { PatientModalForm } from '../components/forms/PatientModalForm'
+import { isTherapist } from '../utils/permissions'
 
 export function PatientsPage() {
+  const { user } = useAuth()
+  const isTherapistRole = isTherapist(user)
+
   const [search, setSearch] = useState('')
   const [statusFilter, setStatusFilter] = useState('')
   const [page, setPage] = useState(1)
@@ -33,19 +38,24 @@ export function PatientsPage() {
       {/* Header */}
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-extrabold text-white tracking-tight flex items-center gap-2">
-            <Users className="w-6 h-6 text-indigo-400" />
-            Patient Directory
+          <h1 className="text-2xl font-extrabold text-slate-900 tracking-tight flex items-center gap-2">
+            <Users className="w-6 h-6 text-blue-600" />
+            {isTherapistRole ? 'Patient Directory' : 'Patient Directory'}
           </h1>
-          <p className="text-xs text-slate-400 mt-1">Manage patient records, medical history, and therapist assignments</p>
+          <p className="text-xs text-slate-500 mt-1">
+            {isTherapistRole
+              ? 'Register new patients, search patient directory, and access clinical records'
+              : 'Manage patient records, contact demographics, and therapist assignments'}
+          </p>
         </div>
+
         <Button variant="primary" size="md" icon={UserPlus} onClick={() => setIsAddModalOpen(true)}>
           Register New Patient
         </Button>
       </div>
 
       {/* Search & Filter Bar */}
-      <div className="flex flex-wrap items-center justify-between gap-4 bg-slate-900/80 p-4 rounded-2xl border border-slate-800">
+      <div className="flex flex-wrap items-center justify-between gap-4 bg-white p-4 rounded-2xl border border-slate-200 shadow-xs">
         <div className="flex-1 max-w-md">
           <SearchInput
             value={search}
@@ -57,7 +67,7 @@ export function PatientsPage() {
         <div className="flex items-center gap-3">
           <div className="flex items-center gap-2">
             <Filter className="w-4 h-4 text-slate-400" />
-            <span className="text-xs text-slate-400 font-semibold">Filter:</span>
+            <span className="text-xs text-slate-600 font-semibold">Filter:</span>
           </div>
           <Select
             value={statusFilter}
@@ -87,7 +97,7 @@ export function PatientsPage() {
         <EmptyState
           icon={Users}
           title="No Patients Found"
-          description="No patient records match your search or filter criteria."
+          description="No patient records match your criteria."
           actionLabel="Register Patient"
           onAction={() => setIsAddModalOpen(true)}
           actionIcon={UserPlus}
@@ -108,12 +118,12 @@ export function PatientsPage() {
             <TableBody>
               {patientList.map((patient) => (
                 <TableRow key={patient.id}>
-                  <TableCell className="font-semibold text-white">
+                  <TableCell className="font-semibold text-slate-900">
                     {patient.full_name || `${patient.first_name} ${patient.last_name}`}
                   </TableCell>
-                  <TableCell className="text-slate-300">{patient.phone}</TableCell>
-                  <TableCell className="capitalize text-slate-400">{patient.gender}</TableCell>
-                  <TableCell className="text-slate-300">{patient.assigned_therapist_name || 'Unassigned'}</TableCell>
+                  <TableCell className="text-slate-600">{patient.phone}</TableCell>
+                  <TableCell className="capitalize text-slate-500">{patient.gender}</TableCell>
+                  <TableCell className="text-slate-700">{patient.assigned_therapist_name || 'Unassigned'}</TableCell>
                   <TableCell>
                     <Badge
                       variant={patient.status === 'active' ? 'success' : patient.status === 'pending' ? 'warning' : 'neutral'}
