@@ -1,11 +1,13 @@
-# API Reference
+# API Reference & Endpoints Summary
 
 ## Base URL
 
 - **Local Development**: `http://localhost:8000/api/v1/`
-- **Docker**: `http://localhost/api/v1/`
-- **Interactive Documentation**: `http://localhost:8000/api/docs/`
-- **OpenAPI Schema**: `http://localhost:8000/api/schema/`
+- **Docker Production**: `http://localhost/api/v1/`
+- **Interactive Swagger Documentation**: `http://localhost:8000/api/docs/`
+- **OpenAPI 3.0 Schema**: `http://localhost:8000/api/schema/`
+
+---
 
 ## Authentication Flow (HttpOnly Cookies)
 
@@ -19,7 +21,7 @@ POST /api/v1/auth/login/
 Content-Type: application/json
 
 {
-  "email": "user@example.com",
+  "email": "admin@cliniccare.com",
   "password": "yourpassword"
 }
 ```
@@ -31,64 +33,10 @@ Content-Type: application/json
   "message": "Login successful.",
   "data": {
     "id": "c303282d-f2e6-46ca-a04a-35d3d725145c",
-    "email": "user@example.com",
-    "first_name": "Jane",
-    "last_name": "Doe",
-    "full_name": "Jane Doe",
-    "role": "admin",
-    "is_active": true,
-    "created_at": "2026-07-29T10:00:00Z",
-    "updated_at": "2026-07-29T10:00:00Z"
-  }
-}
-```
-*Note: Sets `access_token`, `refresh_token`, and `csrftoken` cookies.*
-
-### Refresh Token
-
-```http
-POST /api/v1/auth/refresh/
-```
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Token refreshed."
-}
-```
-
-### Logout
-
-```http
-POST /api/v1/auth/logout/
-```
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "Logged out successfully."
-}
-```
-
-### Current User Profile
-
-```http
-GET /api/v1/auth/me/
-```
-
-**Response (200 OK):**
-```json
-{
-  "success": true,
-  "message": "User profile retrieved.",
-  "data": {
-    "id": "c303282d-f2e6-46ca-a04a-35d3d725145c",
-    "email": "user@example.com",
-    "first_name": "Jane",
-    "last_name": "Doe",
-    "full_name": "Jane Doe",
+    "email": "admin@cliniccare.com",
+    "first_name": "Sarah",
+    "last_name": "Jenkins",
+    "full_name": "Sarah Jenkins",
     "role": "admin",
     "is_active": true
   }
@@ -97,57 +45,23 @@ GET /api/v1/auth/me/
 
 ---
 
-## Response Formats
+## Endpoint Reference Summary
 
-### Standard Success Response
-
-```json
-{
-  "success": true,
-  "message": "Resource created successfully.",
-  "data": { ... }
-}
-```
-
-### Standard Error Response
-
-```json
-{
-  "success": false,
-  "message": "Validation error.",
-  "errors": {
-    "email": ["This field is required."]
-  }
-}
-```
-
-### Paginated List Response
-
-List endpoints support pagination (`?page=1&page_size=20`), search (`?search=term`), and ordering (`?ordering=-created_at`).
-
-```json
-{
-  "count": 42,
-  "next": "http://localhost:8000/api/v1/patients/?page=2",
-  "previous": null,
-  "results": [ ... ]
-}
-```
-
----
-
-## Endpoint Summary (v1)
-
-| Module | Method | Endpoint | Description | Permitted Roles |
+| Module | Method | Endpoint | Description | Allowed Roles |
 | --- | --- | --- | --- | --- |
-| **Auth** | POST | `/api/v1/auth/login/` | User login (sets cookies) | Anyone |
+| **Auth** | POST | `/api/v1/auth/login/` | User login (sets HttpOnly cookies) | Anyone |
 | **Auth** | POST | `/api/v1/auth/refresh/` | Cookie token refresh | Anyone |
 | **Auth** | POST | `/api/v1/auth/logout/` | User logout (clears cookies) | Authenticated |
-| **Auth** | GET | `/api/v1/auth/me/` | Get current user profile | Authenticated |
-| **Users** | GET/POST | `/api/v1/users/` | User management | Admin |
-| **Patients** | GET/POST | `/api/v1/patients/` | Patient management | Admin, Receptionist, Therapist |
-| **Therapists** | GET/POST | `/api/v1/therapists/` | Therapist management | Admin, Receptionist |
-| **Appointments** | GET/POST | `/api/v1/appointments/` | Scheduling & appointments | Admin, Receptionist, Therapist |
-| **Notes** | GET/POST | `/api/v1/notes/` | Session notes | Admin, Therapist |
-| **Dashboard** | GET | `/api/v1/dashboard/` | Aggregated metrics | All Staff |
-| **Reports** | GET/POST | `/api/v1/reports/` | Clinical reports | Admin |
+| **Auth** | GET | `/api/v1/auth/me/` | Current user profile | Authenticated |
+| **Profile** | GET/PATCH | `/api/v1/profile/` | Manage personal profile | Authenticated |
+| **Profile** | POST | `/api/v1/profile/change-password/` | Change personal password | Authenticated |
+| **Users** | GET/POST/DELETE | `/api/v1/users/` | Staff account management | Admin |
+| **Patients** | GET/POST | `/api/v1/patients/` | Search & register patients | Admin, Receptionist, Therapist |
+| **Patients** | GET/PATCH/DELETE | `/api/v1/patients/{id}/` | Patient detail (Scoped by appointment/ownership) | Admin, Receptionist (Demographics), Therapist (Assigned/Created) |
+| **Appointments** | GET/POST | `/api/v1/appointments/` | Scheduling & appointment list | Admin, Receptionist, Therapist (Own sessions) |
+| **Appointments** | POST | `/api/v1/appointments/{id}/complete/` | Complete session & record clinical note | Admin, Therapist (Own session) |
+| **Appointments** | POST | `/api/v1/appointments/{id}/cancel/` | Cancel session & record reason | Admin, Receptionist, Therapist (Own session) |
+| **Dashboard** | GET | `/api/v1/dashboard/` | Aggregated role-tailored metrics | All Authenticated Staff |
+| **Reports** | GET | `/api/v1/reports/` | Clinical activity analytics | Admin, Therapist |
+| **Reports** | POST | `/api/v1/reports/ai-summary/` | Generate AI Clinic Summary | Admin (Clinic-wide), Therapist (Personal) |
+| **Settings** | GET/PATCH | `/api/v1/settings/` | System configuration settings | Admin |
