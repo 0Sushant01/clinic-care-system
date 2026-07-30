@@ -1,137 +1,77 @@
-# Architecture
+# System Architecture
 
-## System Overview
+## Architecture Overview
 
-The Clinic Care System follows a standard three-tier architecture with clear separation of concerns.
-
-```
-┌─────────────────────────────────────────────────┐
-│                    Client                        │
-│              (React SPA + Vite)                  │
-│    Components │ Pages │ Hooks │ Contexts         │
-└──────────────────────┬──────────────────────────┘
-                       │ HTTP (Axios)
-                       │ JWT Bearer Token
-                       ▼
-┌─────────────────────────────────────────────────┐
-│              Nginx Reverse Proxy                 │
-│         /api/ → Backend  │  / → Frontend         │
-└──────────────────────┬──────────────────────────┘
-                       │
-          ┌────────────┴────────────┐
-          ▼                         ▼
-┌──────────────────┐    ┌──────────────────────┐
-│  Django Backend  │    │  React Static Files   │
-│  (Gunicorn)      │    │  (Nginx)             │
-│                  │    └──────────────────────┘
-│  ┌────────────┐  │
-│  │  DRF API   │  │
-│  │  Views     │  │
-│  └─────┬──────┘  │
-│        │         │
-│  ┌─────▼──────┐  │
-│  │  Services  │  │
-│  │  Layer     │──┼──→ OpenRouter API (future)
-│  └─────┬──────┘  │
-│        │         │
-│  ┌─────▼──────┐  │
-│  │  Django ORM│  │
-│  │  Models    │  │
-│  └─────┬──────┘  │
-│        │         │
-└────────┼─────────┘
-         ▼
-┌──────────────────┐
-│    Database       │
-│  SQLite (dev)     │
-│  PostgreSQL (prod)│
-└──────────────────┘
-```
-
-## Key Design Decisions
-
-### 1. Modular App Structure
-
-Each feature is a separate Django app under `apps/`:
-- **users** — Authentication, roles, user profiles
-- **patients** — Patient registration and records
-- **appointments** — Scheduling and calendar
-- **notes** — Therapy session documentation
-- **dashboard** — Aggregated metrics and overview
-- **reports** — Report generation and exports
-
-### 2. Service Layer Pattern
-
-Business logic lives in service classes, NOT in views or serializers:
-- Views handle HTTP request/response
-- Serializers handle validation and data transformation
-- Services handle business rules, external API calls, and complex operations
-
-### 3. Common Utilities
-
-Shared across all apps:
-- `common/responses.py` — Ensures every API returns `{status, message, data}` or `{status, message, errors}`
-- `common/permissions.py` — Role-based access: Admin, Receptionist, Therapist
-- `common/pagination.py` — Consistent pagination across all list endpoints
-
-### 4. AI Architecture (Future)
-
-The AI layer is isolated in `services/ai/`:
-- `client.py` — HTTP client for OpenRouter API
-- `prompts.py` — Centralized prompt templates
-- `summary_service.py` — Session note summarization
-- `progress_service.py` — Patient progress analysis
-
-**Critical rule**: The frontend NEVER communicates directly with AI providers. All AI requests are proxied through Django to maintain security and control.
-
-### 5. Authentication Flow
+The Clinic Care System is an enterprise-grade clinic management system designed with a modular, scalable architecture.
 
 ```
-Client                  Django                  Database
-  │                       │                       │
-  │  POST /api/auth/token │                       │
-  │  {username, password} │                       │
-  │──────────────────────►│  Validate credentials │
-  │                       │──────────────────────►│
-  │                       │◄──────────────────────│
-  │  {access, refresh}    │                       │
-  │◄──────────────────────│                       │
-  │                       │                       │
-  │  GET /api/patients/   │                       │
-  │  Authorization: Bearer│                       │
-  │──────────────────────►│  Verify JWT + Role    │
-  │                       │──────────────────────►│
-  │  200 {data}           │                       │
-  │◄──────────────────────│                       │
+┌─────────────────────────────────────────────────────────────┐
+│                          Client                             │
+│                  (React SPA + Vite)                         │
+│   Components │ Pages │ Axios (withCredentials) │ AuthContext│
+└──────────────────────────────┬──────────────────────────────┘
+                               │ HTTP / Cookies (SameSite/HttpOnly)
+                               │ CSRF Header (X-CSRFToken)
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                    Nginx Reverse Proxy                      │
+│            /api/ → Backend  │  / → Frontend                 │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+               ┌───────────────┴───────────────┐
+               ▼                               ▼
+┌─────────────────────────────┐   ┌──────────────────────────┐
+│   Django Backend (Gunicorn) │   │ React Build Static Files │
+│                             │   └──────────────────────────┘
+│  ┌───────────────────────┐  │
+│  │ API / Cookie Auth     │  │
+│  └───────────┬───────────┘  │
+│              ▼              │
+│  ┌───────────────────────┐  │
+│  │ Business Service Layer│──┼──→ AI Providers (OpenRouter/Gemini/OpenAI)
+│  │ (AI, Audit, PDF, etc.)│  │
+│  └───────────┬───────────┘  │
+│              ▼              │
+│  ┌───────────────────────┐  │
+│  │ Django ORM (BaseModel)│  │
+│  └───────────┬───────────┘  │
+└──────────────┼──────────────┘
+               ▼
+┌─────────────────────────────┐
+│         Database            │
+│ SQLite (dev) / Postgres(prod│
+└─────────────────────────────┘
 ```
 
-### 6. Database Strategy
+## Architectural Principles & Patterns
 
-- **Development**: SQLite — zero configuration, instant setup
-- **Production**: PostgreSQL — configured via environment variables
-- **Migration**: Simply change `DB_ENGINE` env var; no code changes needed
-- **ORM**: Django ORM exclusively — no raw SQL
+### 1. HttpOnly Cookie Authentication & Security
+- **No Token in JavaScript**: JWT tokens (`access_token` and `refresh_token`) are set by Django as `HttpOnly`, `SameSite` cookies. React never accesses raw tokens, mitigating XSS attacks.
+- **CSRF Integration**: State-changing requests (POST, PUT, PATCH, DELETE) require the `X-CSRFToken` header.
+- **Auto Cookie Refresh**: The backend handles token rotation via `/api/v1/auth/refresh/`.
 
-## Docker Architecture
+### 2. Custom User Model & Primary Keys
+- **CustomUser**: Extends `AbstractBaseUser` and `PermissionsMixin`. Uses `email` as `USERNAME_FIELD`.
+- **UUID Primary Keys**: All entities use UUIDv4 primary keys via `BaseModel` to avoid ID enumeration vulnerabilities.
+- **Soft Delete**: `SoftDeleteModel` preserves healthcare data integrity. Entities have `is_deleted` and `deleted_at` timestamps.
 
-```
-docker compose up --build
+### 3. Unified Error Handling & Responses
+- **Global Exception Handler**: `custom_exception_handler` intercepts all DRF and Django exceptions, guaranteeing clean JSON responses:
+  `{"success": false, "message": "...", "errors": {...}}`
+- **Response Format Standard**:
+  `{"success": true, "message": "...", "data": {...}}`
 
-┌──────────────────────────────────────┐
-│           Docker Network             │
-│         (clinic-network)             │
-│                                      │
-│  ┌──────────┐  ┌──────────┐         │
-│  │ Backend  │  │ Frontend │         │
-│  │ :8000    │  │ :3000    │         │
-│  │ Gunicorn │  │ Nginx    │         │
-│  └────┬─────┘  └────┬─────┘         │
-│       │              │               │
-│       └──────┬───────┘               │
-│              │                       │
-│       ┌──────▼──────┐                │
-│       │   Nginx     │                │
-│       │ :80 (proxy) │◄──── Port 80   │
-│       └─────────────┘                │
-└──────────────────────────────────────┘
-```
+### 4. Modular Service Layer
+Business logic is decoupled from views:
+- `services/ai/`: Provider pattern (`OpenRouterProvider`, `GeminiProvider`, `OpenAIProvider`) with prompt templates loaded from disk (`.txt` files).
+- `services/audit/`: Centralized audit logging service tracking user actions.
+- `services/notifications/`, `services/emails/`, `services/pdf/`, `services/storage/`: Dedicated service packages.
+
+### 5. Split Settings & Environment Isolation
+- `config/settings/base.py`: Shared base settings.
+- `config/settings/development.py`: SQLite, Debug=True, relaxed cookies, browsable API.
+- `config/settings/production.py`: PostgreSQL, Debug=False, SSL redirect, HSTS, secure cookies.
+- `config/settings/test.py`: Fast in-memory SQLite testing.
+
+### 6. OpenAPI Documentation
+- Integrated `drf-spectacular` for auto-generated OpenAPI 3.0 schema at `/api/schema/` and Swagger UI at `/api/docs/`.

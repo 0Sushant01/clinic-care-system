@@ -1,9 +1,8 @@
 """
-Django settings for Clinic Care System.
+Base Django settings for Clinic Care System.
 
-Reads sensitive configuration from environment variables via python-dotenv.
-SQLite is used for development; the architecture supports PostgreSQL for production
-by simply changing the DATABASE_URL / DB_* environment variables.
+Shared by all environments (development, production, test).
+Environment-specific settings override values from this file.
 """
 
 import os
@@ -12,11 +11,12 @@ from pathlib import Path
 
 from dotenv import load_dotenv
 
-# Load .env file from project root (one level above backend/)
-load_dotenv(Path(__file__).resolve().parent.parent.parent / ".env")
+# Load .env file from project root (two levels above config/settings/)
+load_dotenv(Path(__file__).resolve().parent.parent.parent.parent / ".env")
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
-BASE_DIR = Path(__file__).resolve().parent.parent
+# BASE_DIR points to backend/ directory.
+BASE_DIR = Path(__file__).resolve().parent.parent.parent
 
 # ---------------------------------------------------------------------------
 # Core
@@ -26,8 +26,6 @@ SECRET_KEY = os.getenv(
     "DJANGO_SECRET_KEY",
     "django-insecure-dev-only-change-me-in-production",
 )
-
-DEBUG = os.getenv("DJANGO_DEBUG", "True").lower() in ("true", "1", "yes")
 
 ALLOWED_HOSTS = os.getenv("DJANGO_ALLOWED_HOSTS", "localhost,127.0.0.1").split(",")
 
@@ -47,9 +45,12 @@ INSTALLED_APPS = [
     "rest_framework",
     "rest_framework_simplejwt",
     "corsheaders",
+    "django_filters",
+    "drf_spectacular",
     # Local apps
     "apps.users",
     "apps.patients",
+    "apps.therapists",
     "apps.appointments",
     "apps.notes",
     "apps.dashboard",
@@ -88,30 +89,10 @@ TEMPLATES = [
 WSGI_APPLICATION = "config.wsgi.application"
 
 # ---------------------------------------------------------------------------
-# Database
+# Custom User Model
 # ---------------------------------------------------------------------------
-# SQLite for development. Switch to PostgreSQL by setting DB_ENGINE env var.
 
-DB_ENGINE = os.getenv("DB_ENGINE", "django.db.backends.sqlite3")
-
-if DB_ENGINE == "django.db.backends.sqlite3":
-    DATABASES = {
-        "default": {
-            "ENGINE": DB_ENGINE,
-            "NAME": BASE_DIR / "db.sqlite3",
-        }
-    }
-else:
-    DATABASES = {
-        "default": {
-            "ENGINE": DB_ENGINE,
-            "NAME": os.getenv("DB_NAME", "clinic_care"),
-            "USER": os.getenv("DB_USER", "postgres"),
-            "PASSWORD": os.getenv("DB_PASSWORD", ""),
-            "HOST": os.getenv("DB_HOST", "localhost"),
-            "PORT": os.getenv("DB_PORT", "5432"),
-        }
-    }
+AUTH_USER_MODEL = "users.CustomUser"
 
 # ---------------------------------------------------------------------------
 # Password validation
@@ -155,7 +136,7 @@ DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
-        "rest_framework_simplejwt.authentication.JWTAuthentication",
+        "apps.users.authentication.CookieJWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (
         "rest_framework.permissions.IsAuthenticated",
@@ -165,14 +146,14 @@ REST_FRAMEWORK = {
     "DEFAULT_RENDERER_CLASSES": (
         "rest_framework.renderers.JSONRenderer",
     ),
+    "DEFAULT_FILTER_BACKENDS": (
+        "django_filters.rest_framework.DjangoFilterBackend",
+        "rest_framework.filters.SearchFilter",
+        "rest_framework.filters.OrderingFilter",
+    ),
+    "EXCEPTION_HANDLER": "common.exceptions.handler.custom_exception_handler",
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
 }
-
-# In development, add the browsable API renderer
-if DEBUG:
-    REST_FRAMEWORK["DEFAULT_RENDERER_CLASSES"] = (
-        "rest_framework.renderers.JSONRenderer",
-        "rest_framework.renderers.BrowsableAPIRenderer",
-    )
 
 # ---------------------------------------------------------------------------
 # SimpleJWT
@@ -188,6 +169,20 @@ SIMPLE_JWT = {
     "ROTATE_REFRESH_TOKENS": True,
     "BLACKLIST_AFTER_ROTATION": True,
     "AUTH_HEADER_TYPES": ("Bearer",),
+    "USER_ID_FIELD": "id",
+    "USER_ID_CLAIM": "user_id",
+}
+
+# ---------------------------------------------------------------------------
+# drf-spectacular (OpenAPI documentation)
+# ---------------------------------------------------------------------------
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Clinic Care System API",
+    "DESCRIPTION": "REST API for the Clinic Care System — manage patients, appointments, session notes, and clinical reports.",
+    "VERSION": "1.0.0",
+    "SERVE_INCLUDE_SCHEMA": False,
+    "COMPONENT_SPLIT_REQUEST": True,
 }
 
 # ---------------------------------------------------------------------------
@@ -200,3 +195,87 @@ CORS_ALLOWED_ORIGINS = os.getenv(
 ).split(",")
 
 CORS_ALLOW_CREDENTIALS = True
+
+# ---------------------------------------------------------------------------
+# CSRF (required for cookie-based JWT auth)
+# ---------------------------------------------------------------------------
+
+CSRF_TRUSTED_ORIGINS = os.getenv(
+    "CSRF_TRUSTED_ORIGINS",
+    "http://localhost:5173,http://127.0.0.1:5173",
+).split(",")
+
+# Let React read the CSRF token from the cookie
+CSRF_COOKIE_HTTPONLY = False
+CSRF_COOKIE_NAME = "csrftoken"
+
+# ---------------------------------------------------------------------------
+# Cookie settings (for JWT HttpOnly cookies)
+# ---------------------------------------------------------------------------
+
+JWT_COOKIE_SECURE = os.getenv("JWT_COOKIE_SECURE", "False").lower() in ("true", "1")
+JWT_COOKIE_SAMESITE = os.getenv("JWT_COOKIE_SAMESITE", "Lax")
+
+# ---------------------------------------------------------------------------
+# AI Configuration
+# ---------------------------------------------------------------------------
+
+AI_PROVIDER = os.getenv("AI_PROVIDER", "openrouter")
+OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "")
+OPENROUTER_MODEL = os.getenv("OPENROUTER_MODEL", "qwen/qwen3-235b-a22b:free")
+
+# ---------------------------------------------------------------------------
+# Logging
+# ---------------------------------------------------------------------------
+
+LOG_DIR = BASE_DIR / "logs"
+LOG_DIR.mkdir(exist_ok=True)
+
+LOGGING = {
+    "version": 1,
+    "disable_existing_loggers": False,
+    "formatters": {
+        "verbose": {
+            "format": "{asctime} [{levelname}] {name} {module}.{funcName}:{lineno} — {message}",
+            "style": "{",
+        },
+        "simple": {
+            "format": "{asctime} [{levelname}] {message}",
+            "style": "{",
+        },
+    },
+    "handlers": {
+        "console": {
+            "class": "logging.StreamHandler",
+            "formatter": "simple",
+        },
+        "file": {
+            "class": "logging.handlers.RotatingFileHandler",
+            "filename": LOG_DIR / "backend.log",
+            "maxBytes": 5 * 1024 * 1024,  # 5 MB
+            "backupCount": 5,
+            "formatter": "verbose",
+        },
+    },
+    "loggers": {
+        "django": {
+            "handlers": ["console", "file"],
+            "level": "INFO",
+            "propagate": False,
+        },
+        "apps": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+        "services": {
+            "handlers": ["console", "file"],
+            "level": "DEBUG",
+            "propagate": False,
+        },
+    },
+    "root": {
+        "handlers": ["console", "file"],
+        "level": "INFO",
+    },
+}

@@ -1,5 +1,5 @@
 # Django core
-Django>=5.1,<5.2
+Django>=5.2,<7.0
 djangorestframework>=3.15,<4.0
 djangorestframework-simplejwt>=5.3,<6.0
 
@@ -14,3 +14,9 @@ gunicorn>=22.0,<23.0
 
 # PostgreSQL adapter (production)
 psycopg2-binary>=2.9,<3.0
+
+# API documentation
+drf-spectacular>=0.27,<1.0
+
+# Filtering
+django-filter>=25.0,<27.0

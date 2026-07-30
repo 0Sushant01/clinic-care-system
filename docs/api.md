@@ -2,156 +2,152 @@
 
 ## Base URL
 
-- **Local Development**: `http://localhost:8000/api/`
-- **Docker**: `http://localhost/api/`
+- **Local Development**: `http://localhost:8000/api/v1/`
+- **Docker**: `http://localhost/api/v1/`
+- **Interactive Documentation**: `http://localhost:8000/api/docs/`
+- **OpenAPI Schema**: `http://localhost:8000/api/schema/`
 
-## Authentication
+## Authentication Flow (HttpOnly Cookies)
 
-All endpoints require JWT authentication unless noted otherwise.
+All protected endpoints require authentication via `HttpOnly` cookies (`access_token` and `refresh_token`).
+The browser automatically includes these cookies with every request when `withCredentials: true` is configured in Axios.
 
-Include the access token in the `Authorization` header:
+### Login
 
-```
-Authorization: Bearer <access_token>
-```
+```http
+POST /api/v1/auth/login/
+Content-Type: application/json
 
-### Obtain Token Pair
-
-```
-POST /api/auth/token/
-```
-
-**Request Body:**
-```json
 {
-  "username": "string",
-  "password": "string"
+  "email": "user@example.com",
+  "password": "yourpassword"
 }
 ```
 
-**Response (200):**
+**Response (200 OK):**
 ```json
 {
-  "access": "eyJ...",
-  "refresh": "eyJ..."
+  "success": true,
+  "message": "Login successful.",
+  "data": {
+    "id": "c303282d-f2e6-46ca-a04a-35d3d725145c",
+    "email": "user@example.com",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "full_name": "Jane Doe",
+    "role": "admin",
+    "is_active": true,
+    "created_at": "2026-07-29T10:00:00Z",
+    "updated_at": "2026-07-29T10:00:00Z"
+  }
+}
+```
+*Note: Sets `access_token`, `refresh_token`, and `csrftoken` cookies.*
+
+### Refresh Token
+
+```http
+POST /api/v1/auth/refresh/
+```
+
+**Response (200 OK):**
+```json
+{
+  "success": true,
+  "message": "Token refreshed."
 }
 ```
 
-### Refresh Access Token
+### Logout
 
-```
-POST /api/auth/token/refresh/
+```http
+POST /api/v1/auth/logout/
 ```
 
-**Request Body:**
+**Response (200 OK):**
 ```json
 {
-  "refresh": "eyJ..."
+  "success": true,
+  "message": "Logged out successfully."
 }
 ```
 
-**Response (200):**
+### Current User Profile
+
+```http
+GET /api/v1/auth/me/
+```
+
+**Response (200 OK):**
 ```json
 {
-  "access": "eyJ..."
+  "success": true,
+  "message": "User profile retrieved.",
+  "data": {
+    "id": "c303282d-f2e6-46ca-a04a-35d3d725145c",
+    "email": "user@example.com",
+    "first_name": "Jane",
+    "last_name": "Doe",
+    "full_name": "Jane Doe",
+    "role": "admin",
+    "is_active": true
+  }
 }
 ```
 
 ---
 
-## Response Format
+## Response Formats
 
-All API responses follow a consistent structure:
-
-### Success Response
+### Standard Success Response
 
 ```json
 {
-  "status": "success",
-  "message": "Description of what happened",
+  "success": true,
+  "message": "Resource created successfully.",
   "data": { ... }
 }
 ```
 
-### Error Response
+### Standard Error Response
 
 ```json
 {
-  "status": "error",
-  "message": "Description of the error",
-  "errors": { ... }
+  "success": false,
+  "message": "Validation error.",
+  "errors": {
+    "email": ["This field is required."]
+  }
 }
 ```
 
-### Paginated Response
+### Paginated List Response
+
+List endpoints support pagination (`?page=1&page_size=20`), search (`?search=term`), and ordering (`?ordering=-created_at`).
 
 ```json
 {
-  "count": 100,
-  "next": "http://localhost:8000/api/patients/?page=2",
+  "count": 42,
+  "next": "http://localhost:8000/api/v1/patients/?page=2",
   "previous": null,
   "results": [ ... ]
 }
 ```
 
-**Query Parameters:**
-- `page` — Page number (default: 1)
-- `page_size` — Items per page (default: 20, max: 100)
-
 ---
 
-## Endpoints
+## Endpoint Summary (v1)
 
-> **Note**: Endpoint implementations will be added as each module is built.
-
-### Users
-
-| Method | Endpoint         | Description          | Roles       |
-| ------ | ---------------- | -------------------- | ----------- |
-| GET    | `/api/users/`    | List users           | Admin       |
-| POST   | `/api/users/`    | Create user          | Admin       |
-| GET    | `/api/users/:id` | Get user details     | Admin       |
-| PUT    | `/api/users/:id` | Update user          | Admin       |
-| DELETE | `/api/users/:id` | Delete user          | Admin       |
-
-### Patients
-
-| Method | Endpoint             | Description          | Roles                    |
-| ------ | -------------------- | -------------------- | ------------------------ |
-| GET    | `/api/patients/`     | List patients        | Admin, Receptionist, Therapist |
-| POST   | `/api/patients/`     | Create patient       | Admin, Receptionist      |
-| GET    | `/api/patients/:id`  | Get patient details  | Admin, Receptionist, Therapist |
-| PUT    | `/api/patients/:id`  | Update patient       | Admin, Receptionist      |
-| DELETE | `/api/patients/:id`  | Delete patient       | Admin                    |
-
-### Appointments
-
-| Method | Endpoint                  | Description              | Roles                    |
-| ------ | ------------------------- | ------------------------ | ------------------------ |
-| GET    | `/api/appointments/`      | List appointments        | All staff                |
-| POST   | `/api/appointments/`      | Create appointment       | Admin, Receptionist      |
-| GET    | `/api/appointments/:id`   | Get appointment details  | All staff                |
-| PUT    | `/api/appointments/:id`   | Update appointment       | Admin, Receptionist      |
-| DELETE | `/api/appointments/:id`   | Cancel appointment       | Admin, Receptionist      |
-
-### Notes
-
-| Method | Endpoint           | Description            | Roles              |
-| ------ | ------------------ | ---------------------- | ------------------ |
-| GET    | `/api/notes/`      | List session notes     | Admin, Therapist   |
-| POST   | `/api/notes/`      | Create session note    | Therapist          |
-| GET    | `/api/notes/:id`   | Get note details       | Admin, Therapist   |
-| PUT    | `/api/notes/:id`   | Update note            | Therapist          |
-
-### Dashboard
-
-| Method | Endpoint            | Description              | Roles    |
-| ------ | ------------------- | ------------------------ | -------- |
-| GET    | `/api/dashboard/`   | Get dashboard metrics    | All staff |
-
-### Reports
-
-| Method | Endpoint           | Description              | Roles          |
-| ------ | ------------------ | ------------------------ | -------------- |
-| GET    | `/api/reports/`    | List available reports   | Admin          |
-| POST   | `/api/reports/`    | Generate report          | Admin          |
+| Module | Method | Endpoint | Description | Permitted Roles |
+| --- | --- | --- | --- | --- |
+| **Auth** | POST | `/api/v1/auth/login/` | User login (sets cookies) | Anyone |
+| **Auth** | POST | `/api/v1/auth/refresh/` | Cookie token refresh | Anyone |
+| **Auth** | POST | `/api/v1/auth/logout/` | User logout (clears cookies) | Authenticated |
+| **Auth** | GET | `/api/v1/auth/me/` | Get current user profile | Authenticated |
+| **Users** | GET/POST | `/api/v1/users/` | User management | Admin |
+| **Patients** | GET/POST | `/api/v1/patients/` | Patient management | Admin, Receptionist, Therapist |
+| **Therapists** | GET/POST | `/api/v1/therapists/` | Therapist management | Admin, Receptionist |
+| **Appointments** | GET/POST | `/api/v1/appointments/` | Scheduling & appointments | Admin, Receptionist, Therapist |
+| **Notes** | GET/POST | `/api/v1/notes/` | Session notes | Admin, Therapist |
+| **Dashboard** | GET | `/api/v1/dashboard/` | Aggregated metrics | All Staff |
+| **Reports** | GET/POST | `/api/v1/reports/` | Clinical reports | Admin |

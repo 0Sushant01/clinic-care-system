@@ -1,41 +1,66 @@
-import { createContext, useContext, useState, useCallback } from 'react'
-import api from '../services/api'
+import { createContext, useContext, useState, useEffect, useCallback } from 'react'
+import { authApi } from '../services/api/auth'
 
 const AuthContext = createContext(null)
 
 /**
  * Authentication context provider.
  *
- * Manages JWT tokens and user state. Wraps the app to provide
- * auth state and actions (login, logout) to all components.
- *
- * Implementation will be completed when the auth module is built.
+ * Manages user state using HttpOnly cookies via backend auth API.
+ * Never stores JWT in localStorage or sessionStorage.
  */
 export function AuthProvider({ children }) {
   const [user, setUser] = useState(null)
-  const [isAuthenticated, setIsAuthenticated] = useState(
-    () => !!localStorage.getItem('access_token')
-  )
+  const [isAuthenticated, setIsAuthenticated] = useState(false)
+  const [isLoading, setIsLoading] = useState(true)
 
-  const login = useCallback(async (credentials) => {
-    const { data } = await api.post('/auth/token/', credentials)
-    localStorage.setItem('access_token', data.access)
-    localStorage.setItem('refresh_token', data.refresh)
-    setIsAuthenticated(true)
-    // TODO: Fetch user profile after login
-    return data
+  // Check auth state on mount by requesting current user profile
+  useEffect(() => {
+    async function checkAuth() {
+      try {
+        const response = await authApi.getMe()
+        if (response?.success && response?.data) {
+          setUser(response.data)
+          setIsAuthenticated(true)
+        } else {
+          setUser(null)
+          setIsAuthenticated(false)
+        }
+      } catch (err) {
+        setUser(null)
+        setIsAuthenticated(false)
+      } finally {
+        setIsLoading(false)
+      }
+    }
+
+    checkAuth()
   }, [])
 
-  const logout = useCallback(() => {
-    localStorage.removeItem('access_token')
-    localStorage.removeItem('refresh_token')
-    setUser(null)
-    setIsAuthenticated(false)
+  const login = useCallback(async (credentials) => {
+    const response = await authApi.login(credentials)
+    if (response?.success && response?.data) {
+      setUser(response.data)
+      setIsAuthenticated(true)
+    }
+    return response
+  }, [])
+
+  const logout = useCallback(async () => {
+    try {
+      await authApi.logout()
+    } catch (err) {
+      // Ignore logout errors
+    } finally {
+      setUser(null)
+      setIsAuthenticated(false)
+    }
   }, [])
 
   const value = {
     user,
     isAuthenticated,
+    isLoading,
     login,
     logout,
   }
@@ -49,7 +74,6 @@ export function AuthProvider({ children }) {
 
 /**
  * Hook to access auth context.
- * Must be used within an AuthProvider.
  */
 export function useAuth() {
   const context = useContext(AuthContext)

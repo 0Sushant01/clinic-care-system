@@ -4,7 +4,7 @@ Role-based permission classes.
 These permissions map to the three staff roles:
 Admin, Receptionist, and Therapist.
 
-Implementation will be completed when the User model and roles are built.
+Uses the custom User model's `role` field for authorization.
 """
 
 from rest_framework.permissions import BasePermission
@@ -51,4 +51,15 @@ class IsAdminOrReceptionist(BasePermission):
             request.user
             and request.user.is_authenticated
             and getattr(request.user, "role", None) in ("admin", "receptionist")
+        )
+
+
+class IsAdminOrTherapist(BasePermission):
+    """Allow access to Admin or Therapist roles."""
+
+    def has_permission(self, request, view) -> bool:  # type: ignore[override]
+        return (
+            request.user
+            and request.user.is_authenticated
+            and getattr(request.user, "role", None) in ("admin", "therapist")
         )

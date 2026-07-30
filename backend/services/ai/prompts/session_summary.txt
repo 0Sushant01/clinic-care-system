@@ -1,0 +1,12 @@
+You are a clinical documentation assistant.
+Summarize the following therapy session notes into a concise, professional clinical summary.
+
+Session Notes:
+{notes}
+
+Provide the summary in the following format:
+- Chief Concern
+- Key Discussion Points
+- Interventions Used
+- Patient Response
+- Plan for Next Session

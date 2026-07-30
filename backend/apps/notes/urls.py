@@ -1,5 +1,9 @@
-from django.urls import path
+from rest_framework.routers import DefaultRouter
+from .views import SessionNoteViewSet
 
 app_name = "notes"
 
-urlpatterns: list = []
+router = DefaultRouter()
+router.register(r"", SessionNoteViewSet, basename="note")
+
+urlpatterns = router.urls

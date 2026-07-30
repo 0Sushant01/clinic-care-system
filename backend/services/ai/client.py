@@ -1,37 +1,51 @@
 """
-AI API client for OpenRouter.
+AI API Client Manager.
 
-This module will handle all HTTP communication with the OpenRouter API.
-The frontend NEVER communicates directly with AI providers — all requests
-are proxied through Django.
-
-TODO: Implement when AI integration begins.
+Provider-agnostic manager that dynamically selects the configured AI provider
+(default: OpenRouter) and loads prompt templates from disk.
 """
 
-import os
-from typing import Any
+from pathlib import Path
+from typing import Any, Dict, List
+
+from django.conf import settings
+from .provider import BaseAIProvider
+from .openrouter import OpenRouterProvider
 
 
-class OpenRouterClient:
-    """HTTP client for the OpenRouter API."""
+class AIClientManager:
+    """Factory and manager for AI operations."""
 
-    BASE_URL = "https://openrouter.ai/api/v1"
+    PROMPTS_DIR = Path(__file__).resolve().parent / "prompts"
 
     def __init__(self) -> None:
-        self.api_key: str = os.getenv("OPENROUTER_API_KEY", "")
+        self.provider_name = getattr(settings, "AI_PROVIDER", "openrouter").lower()
+        self.provider = self._get_provider(self.provider_name)
 
-    def chat_completion(self, messages: list[dict[str, str]], **kwargs: Any) -> dict:
+    def _get_provider(self, provider_name: str) -> BaseAIProvider:
+        """Instantiate configured provider."""
+        if provider_name == "openrouter":
+            return OpenRouterProvider()
+        else:
+            raise ValueError(f"Unsupported AI provider: {provider_name}")
+
+    def load_prompt(self, template_name: str, **kwargs: Any) -> str:
         """
-        Send a chat completion request to OpenRouter.
+        Load prompt template from disk and format with kwargs.
 
         Args:
-            messages: List of message dicts with 'role' and 'content' keys.
-            **kwargs: Additional parameters (model, temperature, etc.).
-
-        Returns:
-            Parsed JSON response from OpenRouter.
-
-        Raises:
-            NotImplementedError: AI integration is not yet implemented.
+            template_name: Name of template (e.g. 'session_summary.txt')
+            **kwargs: Template variables
         """
-        raise NotImplementedError("AI integration is not yet implemented.")
+        file_path = self.PROMPTS_DIR / template_name
+        if not file_path.exists():
+            raise FileNotFoundError(f"Prompt template {template_name} not found.")
+
+        with open(file_path, "r", encoding="utf-8") as f:
+            template_content = f.read()
+
+        return template_content.format(**kwargs)
+
+    def chat_completion(self, messages: List[Dict[str, str]], **kwargs: Any) -> Dict[str, Any]:
+        """Delegate chat completion to active provider."""
+        return self.provider.chat_completion(messages, **kwargs)

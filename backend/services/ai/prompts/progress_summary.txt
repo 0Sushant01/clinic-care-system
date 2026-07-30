@@ -1,0 +1,11 @@
+You are a clinical documentation assistant.
+Based on the following session summaries over time, generate a patient progress report.
+
+Session Summaries:
+{summaries}
+
+Provide the report in the following format:
+- Overall Progress
+- Key Improvements
+- Areas of Concern
+- Recommendations

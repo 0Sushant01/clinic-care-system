@@ -16,11 +16,14 @@ services:
     env_file:
       - .env
     environment:
+      - DJANGO_SETTINGS_MODULE=config.settings.production
       - DJANGO_DEBUG=False
       - DJANGO_ALLOWED_HOSTS=localhost,127.0.0.1,backend
     volumes:
+      - backend_data:/app/data
       - backend_static:/app/staticfiles
       - backend_media:/app/media
+      - backend_logs:/app/logs
     expose:
       - "8000"
     networks:
@@ -59,5 +62,7 @@ networks:
     driver: bridge
 
 volumes:
+  backend_data:
   backend_static:
   backend_media:
+  backend_logs:

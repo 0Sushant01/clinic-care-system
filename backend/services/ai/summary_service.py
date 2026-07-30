@@ -1,29 +1,24 @@
 """
 AI-powered session summary service.
-
-Generates concise clinical summaries from therapy session notes
-using the OpenRouter API.
-
-TODO: Implement when AI integration begins.
 """
 
-from typing import Any
+from typing import Any, Dict
+from .client import AIClientManager
 
 
 class SummaryService:
     """Generate AI-powered session summaries."""
 
-    def generate_summary(self, session_notes: str) -> dict[str, Any]:
+    def __init__(self) -> None:
+        self.ai_client = AIClientManager()
+
+    def generate_summary(self, session_notes: str) -> Dict[str, Any]:
         """
-        Generate a clinical summary from session notes.
-
-        Args:
-            session_notes: Raw text of the therapy session notes.
-
-        Returns:
-            Dict containing the structured summary.
+        Generate clinical summary from session notes.
 
         Raises:
-            NotImplementedError: AI integration is not yet implemented.
+            NotImplementedError: AI integration is planned for a future milestone.
         """
-        raise NotImplementedError("AI integration is not yet implemented.")
+        prompt = self.ai_client.load_prompt("session_summary.txt", notes=session_notes)
+        messages = [{"role": "user", "content": prompt}]
+        return self.ai_client.chat_completion(messages)

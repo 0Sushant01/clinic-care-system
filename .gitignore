@@ -12,6 +12,8 @@ __pycache__/
 dist/
 build/
 *.whl
+logs/
+
 
 # ---- Virtual Environment ----
 backend/venv/

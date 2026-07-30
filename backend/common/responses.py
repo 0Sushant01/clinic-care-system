@@ -23,7 +23,7 @@ def success_response(
 ) -> Response:
     """Return a standardized success response."""
     payload: dict[str, Any] = {
-        "status": "success",
+        "success": True,
         "message": message,
     }
     if data is not None:
@@ -38,7 +38,7 @@ def error_response(
 ) -> Response:
     """Return a standardized error response."""
     payload: dict[str, Any] = {
-        "status": "error",
+        "success": False,
         "message": message,
     }
     if errors is not None:
