@@ -31,8 +31,12 @@ WORKDIR /app
 COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
 COPY --from=builder /usr/local/bin/ /usr/local/bin/
 
-# Copy application source code
+# Copy application source code and entrypoint script
 COPY backend/ .
+COPY docker/backend/entrypoint.sh /app/entrypoint.sh
+
+# Make entrypoint script executable
+RUN chmod +x /app/entrypoint.sh
 
 # Prepare persistent data, static, media, and log directories with proper permissions
 RUN mkdir -p /app/data /app/staticfiles /app/media /app/logs \
@@ -42,5 +46,5 @@ USER appuser
 
 EXPOSE 8000
 
-ENTRYPOINT ["/app/docker/backend/entrypoint.sh"]
+ENTRYPOINT ["/app/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

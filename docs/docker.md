@@ -6,7 +6,7 @@ The MVP Docker deployment consists of 3 lightweight container services:
 
 1. **`backend` (Django Gunicorn - SQLite MVP)**:
    - Built from `docker/backend/Dockerfile` (multi-stage Python 3.12 slim with non-root `appuser`).
-   - Runs `docker/backend/entrypoint.sh` on startup to execute database migrations and `collectstatic`.
+   - Runs `/app/entrypoint.sh` (copied from `docker/backend/entrypoint.sh`) on startup to execute database migrations and `collectstatic`.
    - **Persistent Storage**: Volume `backend_data:/app/data` persists `/app/data/db.sqlite3` across container restarts.
    - Health check probe: `curl -f http://localhost:8000/health/`
 2. **`frontend` (React SPA Served via Nginx)**:
