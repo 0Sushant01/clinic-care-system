@@ -1,44 +1,38 @@
-# Clinic Care System — Enterprise Therapy Clinic Platform
+# Enterprise Clinic Management Platform — Clinic Care System
 
-A production-ready Enterprise Clinic Management Platform built with **Django REST Framework**, **React**, and **Docker**. Specifically architected for therapy clinics to support role-based workflows, dynamic appointment-based patient ownership, embedded clinical documentation, and OpenRouter AI summary integration.
+A production-ready Enterprise Clinic Management System architected with **Django REST Framework**, **React**, **Nginx**, and **Docker Compose**. Engineered for therapy clinics to manage role-based workflows, dynamic patient ownership, double-booking prevention with database locking, embedded clinical session documentation, and OpenRouter AI practice summaries.
 
 ---
 
-## 🌟 Key Application Features
+## 🌟 Architecture & Key Features
 
-### 1. Role Permission Matrix & Security
-- 👑 **Administrator**: Full clinic management, staff account CRUD, clinic-wide operational analytics, system settings, and overall AI clinic summary.
-- 🧑‍💼 **Receptionist**: Dedicated **Reception Desk** view for patient check-ins, demographic editing, patient search, and appointment scheduling. *(Restricted from reading clinical notes, AI summaries, or financial data)*.
-- 🩺 **Therapist**: **My Dashboard** caseload tracking, appointment-based patient ownership, embedded session completion, personal clinical performance reports, and AI summary tab. *(Restricted from viewing appointments or notes of other therapists)*.
+### 1. Role Security Matrix
+- 👑 **Administrator**: Full clinic management, staff account CRUD, operational analytics, system settings, and clinic-wide AI summaries.
+- 🧑‍💼 **Receptionist**: Dedicated **Reception Desk** view for patient check-ins, demographics editing, search, and scheduling. *(Restricted from completing sessions, reading clinical notes, or generating AI summaries — returns HTTP 403 Forbidden)*.
+- 🩺 **Therapist**: **My Dashboard** caseload tracking, appointment-based patient ownership, embedded session completion, personal clinical performance reports, and AI summary tab. *(Restricted from completing or viewing appointments of other therapists)*.
 
-### 2. Dynamic Appointment-Based Patient Ownership
-- Patients are not locked to a single clinician; patients can visit multiple therapists over time through separate appointments.
-- Therapists can access a patient's full clinical details **ONLY IF** `patient.created_by == request.user` OR `Appointment.objects.filter(patient=patient, therapist=request.user).exists()`. Otherwise, the backend returns **`HTTP 403 Forbidden`**.
+### 2. Double-Booking Prevention & Race-Condition Locking
+- **Database Locking (`select_for_update`)**: Enforces atomic transaction locking when checking for time slot overlaps:
+  $$\text{existing.start} < \text{new.end} \quad \text{AND} \quad \text{existing.end} > \text{new.start}$$
+- **Conflict Handling**: Returns **`HTTP 409 Conflict`** (`"This therapist is already booked for the selected time slot."`).
+- **Slot Availability Endpoint**: `GET /api/v1/appointments/availability/?therapist={id}&date=YYYY-MM-DD` populates the occupied time slots banner in the booking modal.
 
-### 3. Binary 3-Status Session Completion Workflow
-- **Statuses**: `Scheduled`, `Completed`, `Cancelled`.
-- Scheduled appointments assigned to a therapist display **ONLY TWO** actions:
-  - **✓ Complete Appointment**: Opens full-screen `CompleteAppointmentModal` capturing Chief Complaint, Session Notes, Treatment Performed, Patient Response, Recommendations, and optional AI Summary. Saves `SessionNote` & sets `status = COMPLETED`.
-  - **✕ Cancel Appointment**: Opens `CancelAppointmentModal` capturing required Cancellation Reason and remarks. Saves cancellation metadata & sets `status = CANCELLED` without creating a `SessionNote`.
-- **Unified Reusable `AppointmentDetailsModal`**: Single modal component dynamically rendering completed clinical records or cancellation reasons and metadata.
-
-### 4. OpenRouter AI Integration & Non-Financial Analytics
-- **Structured Dual Documentation**: Therapist clinical note is the legal source of truth; AI summary is stored independently as structured JSON (`ai_enhanced_summary`). AI never modifies therapist notes.
-- **Reports & AI Summary Tab**: Non-financial clinical activity reports with an interactive AI summary tab (clinic-wide trends for Admin; personal treatment summary for Therapist).
+### 3. OpenRouter AI Integration & Zero-Session Guard
+- **Zero Completed Sessions (`completed_sessions == 0`)**: `ReportAISummaryView` returns `has_data: false`. The frontend renders a clean `EmptyState` (*"No Completed Sessions Yet. AI practice insights will become available after you complete your first therapy session"*).
+- **LLM Note Summarization**: When completed notes exist (> 0), extracts actual text from `SessionNote` records (`chief_complaint`, `treatment_performed`, `patient_response`, `recommendations`) and passes them to the OpenRouter AI provider (`qwen/qwen3-235b-a22b:free`).
 
 ---
 
 ## 🛠️ Technology Stack
 
-| Layer | Technology | Description |
+| Component | Technology | Description |
 | --- | --- | --- |
-| **Backend** | Python 3.12+, Django 5.0+, DRF | Versioned REST API (`/api/v1/`), modular apps, custom permissions |
-| **Auth** | JWT in **HttpOnly Cookies** | Secure token handling, CSRF integration, cookie rotation |
-| **Database** | SQLite (Dev) / PostgreSQL (Prod) | CustomUser with email login, UUID primary keys, Soft Delete |
-| **API Specs** | OpenAPI 3.0 / Swagger UI | Interactive Swagger UI at `/api/docs/` and Schema at `/api/schema/` |
-| **Frontend** | React 18, Vite, Tailwind CSS | Enterprise design system, React Query, Framer Motion animations |
-| **Services** | Extensible AI Provider | OpenRouter AI integration (`qwen/qwen3-235b-a22b:free`) |
-| **Infra** | Docker & Docker Compose | Multi-stage Dockerfiles with Nginx reverse proxy |
+| **Backend** | Python 3.12, Django 5.0+, DRF | Versioned REST API (`/api/v1/`), custom permissions, Gunicorn |
+| **Auth** | JWT in **HttpOnly Cookies** | Protection against XSS, automatic cookie rotation, CSRF integration |
+| **Database Strategy** | **SQLite (MVP Deployment)** / PostgreSQL (Future) | Persistent Docker volume `/app/data/db.sqlite3` with zero DB container overhead |
+| **Frontend** | React 18, Vite, Tailwind CSS | SPA architecture, TanStack React Query, Framer Motion |
+| **Gateway Proxy** | Nginx | Reverse proxy with security headers, Gzip compression, 20MB body size |
+| **Containerization** | Docker & Docker Compose | Multi-stage Dockerfiles with non-root execution and health probes |
 
 ---
 
@@ -52,13 +46,13 @@ clinic-care-system/
 │   │   ├── users/            # Auth, CustomUser & Staff Management
 │   │   ├── patients/         # Patient records & ownership scoping
 │   │   ├── therapists/       # Therapist profiles & credentials
-│   │   ├── appointments/     # 3-status appointment lifecycle & cancel tracking
+│   │   ├── appointments/     # 3-status appointment lifecycle & overlap validation
 │   │   ├── notes/            # SessionNote & OpenRouter AI summaries
-│   │   ├── dashboard/        # Role-customized live dashboard payloads
+│   │   ├── dashboard/        # Role-customized live dashboard metrics
 │   │   ├── reports/          # Clinical analytics & AI Summary tab
-│   │   └── core/             # Clinic configuration settings
-│   ├── common/               # BaseModel, global exception handler, permissions
-│   ├── services/             # AI Provider, audit logging, notifications
+│   │   └── core/             # Clinic configuration & /health/ probe
+│   ├── common/               # BaseModel, global exception handler, 409 exception
+│   ├── services/             # OpenRouter AI provider, audit logging
 │   ├── manage.py
 │   └── requirements.txt
 ├── frontend/                 # React Vite Frontend Application
@@ -72,8 +66,12 @@ clinic-care-system/
 │   ├── vite.config.js
 │   └── package.json
 ├── docker/                   # Docker environment configurations
+│   ├── backend/              # Multi-stage Python 3.12 Dockerfile & entrypoint.sh
+│   ├── frontend/             # Multi-stage Node -> Nginx Dockerfile & frontend.conf
+│   └── nginx/                # Gateway reverse proxy nginx.conf & Dockerfile
 ├── docs/                     # Comprehensive architecture and API docs
 ├── docker-compose.yml
+├── .env.example
 └── README.md
 ```
 
@@ -81,8 +79,9 @@ clinic-care-system/
 
 ## 🚀 Quick Start Guide
 
-### 1. Backend Local Setup
+### 1. Local Development (Backend + Frontend)
 
+#### Backend Setup
 ```bash
 cd backend
 python3 -m venv venv
@@ -94,60 +93,52 @@ cp ../.env.example ../.env      # Configure environment variables
 
 python3 manage.py makemigrations
 python3 manage.py migrate
+python3 manage.py test apps.appointments
 python3 manage.py createsuperuser
 
 python3 manage.py runserver
 ```
-
-- **Backend Base URL**: `http://localhost:8000/api/v1/`
+- **Backend API**: `http://localhost:8000/api/v1/`
+- **Health Check Probe**: `http://localhost:8000/health/`
 - **Swagger Documentation**: `http://localhost:8000/api/docs/`
 
-### 2. Frontend Local Setup
-
+#### Frontend Setup
 ```bash
 cd frontend
 npm install
 npm run dev
 ```
+- **Frontend App**: `http://localhost:5173/`
 
-- **Frontend Application**: `http://localhost:5173/`
+---
 
-### 3. Running with Docker Compose
+## 🐳 Docker Compose Deployment (SQLite Persistent MVP)
 
 ```bash
 cp .env.example .env
-docker compose up --build
+docker compose up --build -d
 ```
 
-- **Production Portal**: `http://localhost/`
+### Health Check Verification
+```bash
+docker compose ps
+curl http://localhost/health/
+```
+
+- **Production Gateway Portal**: `http://localhost/`
 
 ---
 
-## 🔒 API Response Standards
+## 📚 Complete Documentation Index
 
-All API endpoints follow a unified response structure:
-
-```json
-{
-  "success": true,
-  "message": "Operation completed successfully.",
-  "data": {}
-}
-```
-
-Errors return standard HTTP codes (`400`, `401`, `403`, `404`) with descriptive error details:
-
-```json
-{
-  "success": false,
-  "message": "Access Denied: You do not have appointments or ownership with this patient.",
-  "errors": {}
-}
-```
-
----
-
-## 📚 Documentation Links
-
-- [Architecture Guide](docs/architecture.md)
-- [API Reference](docs/api.md)
+- [System Architecture](docs/architecture.md)
+- [Backend Architecture](docs/backend.md)
+- [Frontend Architecture](docs/frontend.md)
+- [Docker Environment Guide](docs/docker.md)
+- [Production Deployment Guide](docs/deployment.md)
+- [Security Architecture](docs/security.md)
+- [API Endpoint Reference](docs/api.md)
+- [Role Permission Matrix](docs/roles.md)
+- [OpenRouter AI Integration](docs/ai.md)
+- [Database Strategy Guide](docs/database.md)
+- [Automated Testing Guide](docs/testing.md)

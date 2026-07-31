@@ -17,6 +17,8 @@ export function AppointmentsPage() {
   const { user } = useAuth()
   const role = user?.role || 'admin'
   const isTherapistRole = role === 'therapist'
+  const isReceptionistRole = role === 'receptionist'
+  const isAdminRole = role === 'admin'
 
   const [statusFilter, setStatusFilter] = useState('')
   const [isBookModalOpen, setIsBookModalOpen] = useState(false)
@@ -41,7 +43,9 @@ export function AppointmentsPage() {
           </h1>
           <p className="text-xs text-slate-500 mt-1">
             {isTherapistRole
-              ? 'Schedule sessions, complete clinical notes, or cancel appointments'
+              ? 'Schedule sessions or complete clinical session notes'
+              : isReceptionistRole
+              ? 'Book, schedule, and manage patient check-in flow'
               : 'Book, manage, and track patient appointment flow'}
           </p>
         </div>
@@ -155,29 +159,33 @@ export function AppointmentsPage() {
                   </div>
                 </div>
 
-                {/* Binary Actions for Scheduled Sessions */}
+                {/* Role-Based Actions for Scheduled Sessions */}
                 <div
                   onClick={(e) => e.stopPropagation()}
                   className="pt-2 flex flex-wrap items-center justify-end gap-2 border-t border-slate-100"
                 >
                   {isScheduled ? (
                     <>
-                      <Button
-                        variant="ghost"
-                        size="sm"
-                        icon={XCircle}
-                        onClick={() => setCancelAppt(appt)}
-                      >
-                        Cancel Appointment
-                      </Button>
-                      <Button
-                        variant="success"
-                        size="sm"
-                        icon={CheckCircle2}
-                        onClick={() => setCompleteAppt(appt)}
-                      >
-                        Complete Appointment
-                      </Button>
+                      {(isReceptionistRole || isAdminRole) && (
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          icon={XCircle}
+                          onClick={() => setCancelAppt(appt)}
+                        >
+                          Cancel Appointment
+                        </Button>
+                      )}
+                      {(isTherapistRole || isAdminRole) && (
+                        <Button
+                          variant="success"
+                          size="sm"
+                          icon={CheckCircle2}
+                          onClick={() => setCompleteAppt(appt)}
+                        >
+                          Complete Appointment
+                        </Button>
+                      )}
                     </>
                   ) : (
                     <Button

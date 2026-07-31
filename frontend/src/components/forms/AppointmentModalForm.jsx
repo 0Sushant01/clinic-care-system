@@ -1,18 +1,20 @@
-import React, { useState } from 'react'
+import React, { useState, useEffect } from 'react'
 import { useForm } from 'react-hook-form'
 import { zodResolver } from '@hookform/resolvers/zod'
 import { appointmentSchema } from './schemas'
 import { Modal } from '../ui/Modal'
 import { FormField, Input, Select, Textarea } from '../ui/Input'
 import { Button } from '../ui/Button'
+import { Badge } from '../ui/Badge'
 import { usePatientsQuery } from '../../hooks/queries/usePatientsQuery'
 import { useTherapistsQuery } from '../../hooks/queries/useTherapistsQuery'
 import { useCreateAppointmentMutation } from '../../hooks/queries/useAppointmentsQuery'
 import { useAuth } from '../../contexts/AuthContext'
 import { isTherapist } from '../../utils/permissions'
 import { useToast } from '../ui/Toast'
-import { Calendar, Clock, UserPlus, Stethoscope, User } from 'lucide-react'
+import { Calendar, Clock, UserPlus, Stethoscope, AlertCircle } from 'lucide-react'
 import { PatientModalForm } from './PatientModalForm'
+import appointmentsApi from '../../services/api/appointments'
 
 export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' }) => {
   const { user } = useAuth()
@@ -20,6 +22,9 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
   const isTherapistRole = isTherapist(user)
 
   const [isNestedPatientModalOpen, setIsNestedPatientModalOpen] = useState(false)
+  const [bookedSlots, setBookedSlots] = useState([])
+  const [isCheckingAvailability, setIsCheckingAvailability] = useState(false)
+  const [conflictErrorMessage, setConflictErrorMessage] = useState('')
 
   const { data: patients, refetch: refetchPatients } = usePatientsQuery()
   const { data: therapists } = useTherapistsQuery()
@@ -32,6 +37,7 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
     handleSubmit,
     reset,
     setValue,
+    watch,
     formState: { errors },
   } = useForm({
     resolver: zodResolver(appointmentSchema),
@@ -46,8 +52,36 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
     },
   })
 
+  const watchedTherapist = watch('therapist') || (isTherapistRole ? user?.id : '')
+  const watchedDate = watch('appointment_date')
+
+  // Fetch occupied slots whenever therapist or date changes
+  useEffect(() => {
+    let isMounted = true
+    if (watchedTherapist && watchedDate) {
+      setIsCheckingAvailability(true)
+      setConflictErrorMessage('')
+      appointmentsApi
+        .getAvailability({ therapist: watchedTherapist, date: watchedDate })
+        .then((res) => {
+          if (isMounted) {
+            setBookedSlots(res?.data?.booked_slots || [])
+            setIsCheckingAvailability(false)
+          }
+        })
+        .catch(() => {
+          if (isMounted) setIsCheckingAvailability(false)
+        })
+    } else {
+      setBookedSlots([])
+    }
+    return () => {
+      isMounted = false
+    }
+  }, [watchedTherapist, watchedDate])
+
   const onSubmit = (data) => {
-    // For therapist role, force therapist ID to logged-in user
+    setConflictErrorMessage('')
     const payload = isTherapistRole ? { ...data, therapist: user?.id } : data
 
     createMutation.mutate(payload, {
@@ -57,7 +91,13 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
         onClose()
       },
       onError: (err) => {
-        toast.error('Booking Failed', err.message || 'Could not schedule appointment.')
+        const message = err?.message || err?.response?.data?.message || 'Could not schedule appointment.'
+        if (err?.status === 409 || err?.response?.status === 409) {
+          setConflictErrorMessage('This therapist is already booked for the selected time slot.')
+          toast.error('Scheduling Conflict', 'This therapist is already booked for the selected time slot.')
+        } else {
+          toast.error('Booking Failed', message)
+        }
       },
     })
   }
@@ -98,6 +138,14 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
         }
       >
         <form onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+          {/* Conflict Banner Alert */}
+          {conflictErrorMessage && (
+            <div className="p-4 bg-rose-50 border border-rose-200 rounded-2xl flex items-center gap-3 text-rose-800 text-xs font-bold animate-fade-in">
+              <AlertCircle className="w-5 h-5 text-rose-600 flex-shrink-0" />
+              <span>{conflictErrorMessage}</span>
+            </div>
+          )}
+
           {/* Section 1: Session Participants */}
           <div className="space-y-5">
             <div className="flex items-center justify-between pb-3 border-b border-slate-100">
@@ -155,10 +203,32 @@ export const AppointmentModalForm = ({ isOpen, onClose, defaultPatientId = '' })
 
           {/* Section 2: Time & Location */}
           <div className="space-y-5">
-            <div className="flex items-center gap-2 pb-3 border-b border-slate-100 text-slate-900 font-extrabold text-xs tracking-wider uppercase">
-              <Clock className="w-4 h-4 text-blue-600" />
-              <span>Schedule & Room Assignment</span>
+            <div className="flex items-center justify-between pb-3 border-b border-slate-100">
+              <div className="flex items-center gap-2 text-slate-900 font-extrabold text-xs tracking-wider uppercase">
+                <Clock className="w-4 h-4 text-blue-600" />
+                <span>Schedule & Room Assignment</span>
+              </div>
+              {isCheckingAvailability && (
+                <span className="text-[10px] font-semibold text-slate-400 animate-pulse">Checking availability...</span>
+              )}
             </div>
+
+            {/* Occupied slots display */}
+            {bookedSlots.length > 0 && (
+              <div className="p-3.5 bg-amber-50/80 border border-amber-200/80 rounded-2xl space-y-2">
+                <div className="text-[11px] font-bold text-amber-900 flex items-center gap-1.5">
+                  <AlertCircle className="w-3.5 h-3.5 text-amber-600" />
+                  <span>Occupied Time Slots for Selected Date:</span>
+                </div>
+                <div className="flex flex-wrap gap-2">
+                  {bookedSlots.map((slot, idx) => (
+                    <Badge key={idx} variant="warning" size="sm">
+                      {slot.start} – {slot.end}
+                    </Badge>
+                  ))}
+                </div>
+              </div>
+            )}
 
             <div className="grid grid-cols-1 sm:grid-cols-3 gap-5">
               <FormField label="Appointment Date" required error={errors.appointment_date?.message}>

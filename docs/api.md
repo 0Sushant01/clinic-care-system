@@ -4,6 +4,7 @@
 
 - **Local Development**: `http://localhost:8000/api/v1/`
 - **Docker Production**: `http://localhost/api/v1/`
+- **Health Check Probe**: `http://localhost/health/` and `http://localhost/api/v1/health/`
 - **Interactive Swagger Documentation**: `http://localhost:8000/api/docs/`
 - **OpenAPI 3.0 Schema**: `http://localhost:8000/api/schema/`
 
@@ -49,6 +50,7 @@ Content-Type: application/json
 
 | Module | Method | Endpoint | Description | Allowed Roles |
 | --- | --- | --- | --- | --- |
+| **Health** | GET | `/health/` | Public Container & DB Health Check Probe | Anyone |
 | **Auth** | POST | `/api/v1/auth/login/` | User login (sets HttpOnly cookies) | Anyone |
 | **Auth** | POST | `/api/v1/auth/refresh/` | Cookie token refresh | Anyone |
 | **Auth** | POST | `/api/v1/auth/logout/` | User logout (clears cookies) | Authenticated |
@@ -58,10 +60,11 @@ Content-Type: application/json
 | **Users** | GET/POST/DELETE | `/api/v1/users/` | Staff account management | Admin |
 | **Patients** | GET/POST | `/api/v1/patients/` | Search & register patients | Admin, Receptionist, Therapist |
 | **Patients** | GET/PATCH/DELETE | `/api/v1/patients/{id}/` | Patient detail (Scoped by appointment/ownership) | Admin, Receptionist (Demographics), Therapist (Assigned/Created) |
-| **Appointments** | GET/POST | `/api/v1/appointments/` | Scheduling & appointment list | Admin, Receptionist, Therapist (Own sessions) |
-| **Appointments** | POST | `/api/v1/appointments/{id}/complete/` | Complete session & record clinical note | Admin, Therapist (Own session) |
-| **Appointments** | POST | `/api/v1/appointments/{id}/cancel/` | Cancel session & record reason | Admin, Receptionist, Therapist (Own session) |
+| **Appointments** | GET/POST | `/api/v1/appointments/` | Scheduling & appointment list (returns 409 on overlap) | Admin, Receptionist, Therapist (Own sessions) |
+| **Appointments** | GET | `/api/v1/appointments/availability/` | Get booked slots (`?therapist={id}&date=YYYY-MM-DD`) | Admin, Receptionist, Therapist |
+| **Appointments** | POST | `/api/v1/appointments/{id}/complete/` | Complete session & record clinical note | Admin, Therapist (Own session only) |
+| **Appointments** | POST | `/api/v1/appointments/{id}/cancel/` | Cancel session & record reason | Admin, Receptionist, Therapist (Own session only) |
 | **Dashboard** | GET | `/api/v1/dashboard/` | Aggregated role-tailored metrics | All Authenticated Staff |
 | **Reports** | GET | `/api/v1/reports/` | Clinical activity analytics | Admin, Therapist |
-| **Reports** | POST | `/api/v1/reports/ai-summary/` | Generate AI Clinic Summary | Admin (Clinic-wide), Therapist (Personal) |
+| **Reports** | POST | `/api/v1/reports/ai-summary/` | Generate AI Clinic Summary (Returns 0-session empty state if no notes) | Admin (Clinic-wide), Therapist (Personal) |
 | **Settings** | GET/PATCH | `/api/v1/settings/` | System configuration settings | Admin |

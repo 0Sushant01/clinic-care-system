@@ -2,12 +2,44 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from django_filters.rest_framework import DjangoFilterBackend
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied, ValidationError
 from django.utils import timezone
+from django.db import transaction
 
 from .models import Appointment, AppointmentStatus
 from .serializers import AppointmentSerializer
 from apps.notes.models import SessionNote, AIResult, AIType
 from common.responses import success_response, error_response
+from common.exceptions import AppointmentConflictException
+
+
+def validate_and_lock_therapist_slot(therapist, appointment_date, start_time, end_time, instance_id=None):
+    """
+    Validates therapist time slot overlap with database row locking (`select_for_update`)
+    within atomic transactions to protect against race conditions.
+
+    Overlaps if: existing.start < new.end AND existing.end > new.start
+    Excludes CANCELLED appointments and self instance ID during updates.
+    """
+    if start_time >= end_time:
+        raise ValidationError({"end_time": "End time must be after start time."})
+
+    # Lock existing appointments for this therapist on date against concurrent writes
+    existing_appts = Appointment.objects.select_for_update().filter(
+        therapist=therapist,
+        appointment_date=appointment_date,
+    ).exclude(status=AppointmentStatus.CANCELLED)
+
+    if instance_id:
+        existing_appts = existing_appts.exclude(id=instance_id)
+
+    has_overlap = existing_appts.filter(
+        start_time__lt=end_time,
+        end_time__gt=start_time
+    ).exists()
+
+    if has_overlap:
+        raise AppointmentConflictException()
 
 
 class AppointmentViewSet(viewsets.ModelViewSet):
@@ -35,12 +67,49 @@ class AppointmentViewSet(viewsets.ModelViewSet):
 
         return Appointment.objects.all()
 
+    def get_object(self):
+        user = self.request.user
+        pk = self.kwargs.get("pk")
+        if getattr(user, "role", None) == "therapist" and pk:
+            try:
+                obj = Appointment.objects.get(pk=pk)
+                if obj.therapist != user:
+                    raise PermissionDenied("Access Denied: You are not assigned to this appointment.")
+                return obj
+            except Appointment.DoesNotExist:
+                pass
+        return super().get_object()
+
+    @transaction.atomic
     def perform_create(self, serializer):
         user = self.request.user
+        validated_data = serializer.validated_data
+
+        therapist = user if getattr(user, "role", None) == "therapist" else validated_data.get("therapist")
+        appointment_date = validated_data.get("appointment_date")
+        start_time = validated_data.get("start_time")
+        end_time = validated_data.get("end_time")
+
+        validate_and_lock_therapist_slot(therapist, appointment_date, start_time, end_time)
+
         if getattr(user, "role", None) == "therapist":
             serializer.save(therapist=user)
         else:
             serializer.save()
+
+    @transaction.atomic
+    def perform_update(self, serializer):
+        user = self.request.user
+        validated_data = serializer.validated_data
+        instance = serializer.instance
+
+        therapist = validated_data.get("therapist", instance.therapist)
+        appointment_date = validated_data.get("appointment_date", instance.appointment_date)
+        start_time = validated_data.get("start_time", instance.start_time)
+        end_time = validated_data.get("end_time", instance.end_time)
+
+        validate_and_lock_therapist_slot(therapist, appointment_date, start_time, end_time, instance_id=instance.id)
+        serializer.save()
 
     def list(self, request, *args, **kwargs):
         queryset = self.filter_queryset(self.get_queryset())
@@ -88,16 +157,60 @@ class AppointmentViewSet(viewsets.ModelViewSet):
         instance.delete()
         return success_response(message="Appointment cancelled and deleted successfully.")
 
+    @action(detail=False, methods=["get"], url_path="availability")
+    def get_availability(self, request):
+        """
+        GET /api/v1/appointments/availability/?therapist={id}&date=YYYY-MM-DD
+
+        Returns active booked slots for a given therapist and date to allow frontend slot disabling.
+        """
+        therapist_id = request.query_params.get("therapist")
+        date_str = request.query_params.get("date")
+
+        if not therapist_id or not date_str:
+            return error_response(message="therapist and date query parameters are required.", status_code=400)
+
+        booked_appts = Appointment.objects.filter(
+            therapist_id=therapist_id,
+            appointment_date=date_str,
+        ).exclude(status=AppointmentStatus.CANCELLED).order_by("start_time")
+
+        booked_slots = [
+            {
+                "start": appt.start_time.strftime("%H:%M"),
+                "end": appt.end_time.strftime("%H:%M"),
+            }
+            for appt in booked_appts
+        ]
+
+        return success_response(data={"booked_slots": booked_slots})
+
     @action(detail=True, methods=["post"], url_path="complete")
     def complete_appointment(self, request, pk=None):
         """
         Complete Appointment & Embedded Clinical Documentation Action.
-        """
-        appointment = self.get_object()
-        user = request.user
 
-        if getattr(user, "role", None) == "therapist" and appointment.therapist != user:
-            return error_response(message="Access Denied: You can only complete your own appointments.", status_code=403)
+        Role & Ownership Authorization:
+        - Receptionists: HTTP 403 Forbidden.
+        - Therapists: Allowed ONLY if appointment.therapist == request.user (HTTP 403 Forbidden otherwise).
+        - Admins: Allowed.
+        """
+        user = request.user
+        role = getattr(user, "role", None)
+
+        if role == "receptionist":
+            return error_response(
+                message="Receptionists are not authorized to complete appointments or create clinical notes.",
+                status_code=403,
+            )
+
+        appointment = self.get_object()
+
+        if role == "therapist" and appointment.therapist != user:
+            return error_response(
+                message="Access Denied: You can only complete your own appointments.",
+                status_code=403,
+            )
 
         data = request.data
         chief_complaint = data.get("chief_complaint", "")
@@ -168,13 +281,6 @@ class AppointmentViewSet(viewsets.ModelViewSet):
     def cancel_appointment(self, request, pk=None):
         """
         Cancel Appointment Action.
-
-        Accepts:
-        - cancel_reason (required)
-        - cancel_notes (optional)
-
-        Updates status = CANCELLED, records cancellation metadata.
-        Guarantees NO SessionNote or AI summary is created.
         """
         appointment = self.get_object()
         user = request.user

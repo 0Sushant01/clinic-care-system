@@ -28,7 +28,11 @@ export function ReportsPage() {
       const res = await api.post('/reports/ai-summary/')
       const payload = res.data?.data || res.data
       setAiSummaryData(payload)
-      toast.success('AI Summary Generated', 'Clinic operational & treatment summary created.')
+      if (payload?.has_data === false) {
+        toast.info('No Clinical Notes Yet', payload?.message || 'Complete a session to enable AI summaries.')
+      } else {
+        toast.success('AI Summary Generated', 'Clinical practice summary created from session notes.')
+      }
     } catch (err) {
       toast.error('Generation Failed', err?.response?.data?.message || 'Could not generate AI clinic summary.')
     } finally {
@@ -62,6 +66,9 @@ export function ReportsPage() {
 
   const role = report?.role || user?.role || 'admin'
   const isTherapistRole = role === 'therapist'
+
+  const completedSessionsCount = report?.completed_sessions ?? report?.completed_appointments ?? 0
+  const hasNoCompletedSessions = completedSessionsCount === 0
 
   return (
     <div className="space-y-6 animate-fade-in">
@@ -112,26 +119,26 @@ export function ReportsPage() {
           <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
             <StatCard
               title={isTherapistRole ? "My Patients" : "Total Patients"}
-              value={report?.total_patients ?? 126}
+              value={report?.total_patients ?? 0}
               icon={Users}
               description="Active in directory"
             />
             <StatCard
               title={isTherapistRole ? "My Appointments" : "Total Appointments"}
-              value={report?.total_appointments ?? 160}
+              value={report?.total_appointments ?? 0}
               icon={Calendar}
               description="Booked sessions"
             />
             <StatCard
               title="Completed Sessions"
-              value={report?.completed_sessions ?? report?.completed_appointments ?? 142}
+              value={completedSessionsCount}
               icon={CheckCircle2}
               iconBg="bg-emerald-50 text-emerald-700 border-emerald-200"
-              description={`Completion Rate: ${report?.completion_rate || '94.6%'}`}
+              description={`Completion Rate: ${report?.completion_rate || '0.0%'}`}
             />
             <StatCard
               title="Missed / Cancelled"
-              value={report?.missed_sessions ?? report?.missed_appointments ?? 8}
+              value={report?.missed_sessions ?? report?.missed_appointments ?? 0}
               icon={XCircle}
               iconBg="bg-red-50 text-red-700 border-red-200"
               description="Did not attend"
@@ -149,18 +156,22 @@ export function ReportsPage() {
                 </CardHeader>
                 <CardContent className="p-0">
                   <div className="divide-y divide-slate-100">
-                    {(report?.therapist_workload || []).map((t, idx) => (
-                      <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50">
-                        <div>
-                          <h4 className="text-xs font-bold text-slate-900">{t.name}</h4>
-                          <p className="text-[11px] text-slate-500">{t.completed} sessions completed</p>
+                    {(report?.therapist_workload || []).length === 0 ? (
+                      <div className="p-6 text-center text-xs text-slate-500">No therapist workload recorded.</div>
+                    ) : (
+                      (report?.therapist_workload || []).map((t, idx) => (
+                        <div key={idx} className="p-4 flex items-center justify-between hover:bg-slate-50">
+                          <div>
+                            <h4 className="text-xs font-bold text-slate-900">{t.name}</h4>
+                            <p className="text-[11px] text-slate-500">{t.completed} sessions completed</p>
+                          </div>
+                          <div className="flex items-center gap-3 text-xs">
+                            <span className="text-slate-500">Missed: {t.missed}</span>
+                            <Badge variant="success" dot>Active</Badge>
+                          </div>
                         </div>
-                        <div className="flex items-center gap-3 text-xs">
-                          <span className="text-slate-500">Missed: {t.missed}</span>
-                          <Badge variant="success" dot>Active</Badge>
-                        </div>
-                      </div>
-                    ))}
+                      ))
+                    )}
                   </div>
                 </CardContent>
               </Card>
@@ -205,13 +216,20 @@ export function ReportsPage() {
                 icon={Sparkles}
                 onClick={handleGenerateAiSummary}
                 isLoading={isGeneratingAi}
+                isDisabled={hasNoCompletedSessions}
               >
                 {aiSummaryData ? 'Regenerate AI Clinic Summary' : 'Generate AI Clinic Summary'}
               </Button>
             </CardHeader>
 
             <CardContent className="p-6">
-              {!aiSummaryData ? (
+              {hasNoCompletedSessions || (aiSummaryData && aiSummaryData.has_data === false) ? (
+                <EmptyState
+                  icon={Sparkles}
+                  title="No Completed Sessions Yet"
+                  description="AI practice insights will become available after you complete your first therapy session and submit clinical notes."
+                />
+              ) : !aiSummaryData ? (
                 <div className="p-12 bg-blue-50/60 border border-blue-100 rounded-2xl text-center space-y-4">
                   <Sparkles className="w-10 h-10 text-blue-600 mx-auto" />
                   <h3 className="text-base font-bold text-slate-900">Generate AI Summary</h3>

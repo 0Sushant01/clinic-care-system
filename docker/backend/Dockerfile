@@ -1,31 +1,46 @@
 # ---- Backend Dockerfile ----
-# Python 3.12 slim image for Django + Gunicorn
+# Python 3.12 slim image for Django + Gunicorn (SQLite MVP Deployment)
 
-FROM python:3.12-slim
+FROM python:3.12-slim AS builder
 
-# Prevent Python from writing .pyc files and enable unbuffered output
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Install system dependencies (required for psycopg2-binary)
-RUN apt-get update \
-    && apt-get install -y --no-install-recommends gcc libpq-dev \
-    && rm -rf /var/lib/apt/lists/*
-
-# Install Python dependencies
 COPY backend/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
-# Copy application code
+# ---- Final Stage ----
+FROM python:3.12-slim
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+# Install runtime utilities including curl for container health checks
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends curl \
+    && rm -rf /var/lib/apt/lists/*
+
+# Create non-root system user
+RUN useradd -m -u 1000 appuser
+
+WORKDIR /app
+
+# Copy installed Python packages from builder
+COPY --from=builder /usr/local/lib/python3.12/site-packages/ /usr/local/lib/python3.12/site-packages/
+COPY --from=builder /usr/local/bin/ /usr/local/bin/
+
+# Copy application source code
 COPY backend/ .
 
-# Collect static files
-RUN python manage.py collectstatic --noinput 2>/dev/null || true
+# Prepare persistent data, static, media, and log directories with proper permissions
+RUN mkdir -p /app/data /app/staticfiles /app/media /app/logs \
+    && chown -R appuser:appuser /app
 
-# Expose port
+USER appuser
+
 EXPOSE 8000
 
-# Run with Gunicorn
+ENTRYPOINT ["/app/docker/backend/entrypoint.sh"]
 CMD ["gunicorn", "config.wsgi:application", "--bind", "0.0.0.0:8000", "--workers", "3", "--timeout", "120"]

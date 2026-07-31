@@ -1,8 +1,8 @@
-# System Architecture
+# System Architecture Guide
 
-## Architecture Overview
+## Overview
 
-The Clinic Care System is an enterprise-grade therapy clinic management system designed with a modular, scalable architecture.
+The Clinic Care System is an enterprise therapy clinic platform designed with a decoupled React SPA frontend and a modular Django REST Framework backend orchestrated via Docker Compose and Nginx.
 
 ```
 ┌─────────────────────────────────────────────────────────────┐
@@ -15,7 +15,7 @@ The Clinic Care System is an enterprise-grade therapy clinic management system d
                                ▼
 ┌─────────────────────────────────────────────────────────────┐
 │                    Nginx Reverse Proxy                      │
-│            /api/ → Backend  │  / → Frontend                 │
+│      /api/ → Backend  │  /media/ → Backend  │  / → Frontend │
 └──────────────────────────────┬──────────────────────────────┘
                                │
                 ┌──────────────┴───────────────┐
@@ -38,32 +38,19 @@ The Clinic Care System is an enterprise-grade therapy clinic management system d
 └──────────────┼──────────────┘
                ▼
 ┌─────────────────────────────┐
-│         Database            │
-│ SQLite (dev) / Postgres(prod│
+│  Persistent SQLite Volume   │
+│  /app/data/db.sqlite3 (MVP) │
 └─────────────────────────────┘
 ```
 
-## Core Architectural Principles & Workflow
+## Database Architecture & Future Scaling
 
-### 1. Dynamic Appointment-Based Patient Ownership
-- Patients visit multiple therapists over time via separate appointments.
-- Backend enforces patient detail access for therapists ONLY IF `created_by == request.user` OR therapist has at least 1 appointment with that patient.
+- **Current MVP Deployment**: Persistent SQLite database mounted at `/app/data/db.sqlite3` via Docker volume `backend_data`.
+- **Future Production Scaling**: Migration path to PostgreSQL requires zero business logic or API changes.
 
-### 2. 3-Status Session Lifecycle & Binary Therapist Actions
-- **Statuses**: `Scheduled`, `Completed`, `Cancelled`.
-- Therapists receive a binary action choice for scheduled appointments:
-  - **Complete Appointment**: Captures Chief Complaint, Session Notes, Treatment Performed, Patient Response, Recommendations, and optional AI summary. Saves `SessionNote` & status = `COMPLETED`.
-  - **Cancel Appointment**: Captures Cancellation Reason and remarks. Saves cancellation metadata & status = `CANCELLED` without creating a `SessionNote`.
+## Security & Core Highlights
 
-### 3. OpenRouter AI Integration
-- **Structured Dual Documentation**: Therapist clinical note is the legal source of truth. AI summary is stored independently as structured JSON (`ai_enhanced_summary`). AI never modifies therapist notes.
-
-### 4. HttpOnly Cookie Authentication & Security
-- JWT tokens (`access_token` and `refresh_token`) are managed via `HttpOnly` cookies.
-- State-changing requests require `X-CSRFToken` header.
-- Token rotation handled via `/api/v1/auth/refresh/`.
-
-### 5. Custom User Model & Base Models
-- **CustomUser**: Extends `AbstractBaseUser` using `email` as primary identifier.
-- **UUID Primary Keys**: All entities use UUIDv4 primary keys via `BaseModel`.
-- **Soft Delete**: `SoftDeleteModel` preserves healthcare data integrity.
+1. **Security & Auth**: JWT tokens handled strictly via `HttpOnly` cookies.
+2. **Double-Booking Protection**: Transaction atomic locking (`select_for_update`) prevents time slot collisions, returning `HTTP 409 Conflict`.
+3. **Appointment-Based Patient Ownership**: Patient access for therapists requires creation ownership or an active appointment relationship.
+4. **OpenRouter AI Summarization**: Synthesizes actual completed session note records; returns empty state (`has_data: false`) when 0 notes exist.

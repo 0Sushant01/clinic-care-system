@@ -1,10 +1,47 @@
+import os
 from rest_framework.views import APIView
-from rest_framework.permissions import IsAuthenticated
+from rest_framework.permissions import AllowAny, IsAuthenticated
+from django.db import connection
 from common.permissions import IsAdmin
 from common.responses import success_response, error_response
 from .models import ClinicConfiguration, AIConfiguration
 from .serializers import ClinicSettingsSerializer
 from services.audit.service import AuditLogService
+
+
+class HealthCheckView(APIView):
+    """
+    GET /health/ or /api/v1/health/
+
+    Public health check endpoint for Docker container probes and load balancers.
+    Validates DB connection and AI provider configuration status.
+    """
+
+    permission_classes = [AllowAny]
+    authentication_classes = []
+
+    def get(self, request):
+        db_healthy = True
+        db_message = "connected"
+        try:
+            connection.ensure_connection()
+        except Exception as e:
+            db_healthy = False
+            db_message = f"error: {str(e)}"
+
+        openrouter_key = os.getenv("OPENROUTER_API_KEY", "")
+        ai_status = "configured" if openrouter_key else "disabled"
+
+        payload = {
+            "status": "healthy" if db_healthy else "unhealthy",
+            "database": db_message,
+            "ai_provider": ai_status,
+        }
+
+        if not db_healthy:
+            return error_response(message="Database health check failed.", errors=payload, status_code=503)
+
+        return success_response(data=payload, message="System operational.")
 
 
 class SettingsView(APIView):
