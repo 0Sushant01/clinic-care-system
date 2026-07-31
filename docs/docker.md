@@ -8,14 +8,14 @@ The MVP Docker deployment consists of 3 lightweight container services:
    - Built from `docker/backend/Dockerfile` (multi-stage Python 3.12 slim with non-root `appuser`).
    - Runs `/app/entrypoint.sh` (copied from `docker/backend/entrypoint.sh`) on startup to execute database migrations and `collectstatic`.
    - **Persistent Storage**: Volume `backend_data:/app/data` persists `/app/data/db.sqlite3` across container restarts.
-   - Health check probe: `curl -f http://localhost:8000/health/`
+   - Health check probe: `curl -f http://127.0.0.1:8000/health/ || exit 1`
 2. **`frontend` (React SPA Served via Nginx)**:
    - Built from `docker/frontend/Dockerfile` (Node 20 build -> Nginx Alpine listening on port 80).
-   - Health check probe: `wget --spider http://localhost/`
+   - Health check probe: `wget -q --spider http://127.0.0.1 || exit 1`
 3. **`nginx` (Gateway Reverse Proxy)**:
    - Built from `docker/nginx/Dockerfile`.
    - Configured with security headers, Gzip compression, and 20MB body size limit.
-   - Health check probe: `curl -f http://localhost:80/`
+   - Health check probe: `curl -f http://127.0.0.1/ || exit 1`
 
 ## Database Strategy & Volumes
 
