@@ -10,8 +10,8 @@ The MVP Docker deployment consists of 3 lightweight container services:
    - **Persistent Storage**: Volume `backend_data:/app/data` persists `/app/data/db.sqlite3` across container restarts.
    - Health check probe: `curl -f http://localhost:8000/health/`
 2. **`frontend` (React SPA Served via Nginx)**:
-   - Built from `docker/frontend/Dockerfile` (Node 20 build -> Nginx Alpine).
-   - Health check probe: `wget --spider http://localhost:3000/`
+   - Built from `docker/frontend/Dockerfile` (Node 20 build -> Nginx Alpine listening on port 80).
+   - Health check probe: `wget --spider http://localhost/`
 3. **`nginx` (Gateway Reverse Proxy)**:
    - Built from `docker/nginx/Dockerfile`.
    - Configured with security headers, Gzip compression, and 20MB body size limit.
